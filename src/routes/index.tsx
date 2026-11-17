@@ -46,6 +46,22 @@ function Card({ s, has }: { s: (typeof SKINS)[number]; has: boolean }) {
 }
 const COIN_EVERY = 500;
 
+/* ===== античит: 1) подпись сохранения 2) проверка честности баланса и скинов 3) защита от автокликера ===== */
+const AC_SALT = "chibi-os::\u0441\u043e\u043b\u044c::v1";
+function acHash(str: string) { let h1 = 0xdeadbeef, h2 = 0x41c6ce57; for (let i = 0; i < str.length; i++) { const c = str.charCodeAt(i); h1 = Math.imul(h1 ^ c, 2654435761); h2 = Math.imul(h2 ^ c, 1597334677); } h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909); h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909); return (h2 >>> 0).toString(36) + (h1 >>> 0).toString(36); }
+const acSign = (d: object) => acHash(AC_SALT + JSON.stringify(d) + AC_SALT.length);
+/** Сколько коинов игрок мог честно заработать минус потраченное. */
+function acSanitize(d: { clicks: number; coins: number; owned: string[]; skin: string; claimed: string[]; bonus: number; spent: number; gifts: string[] }) {
+  const clicks = Math.max(0, Math.floor(d.clicks) || 0);
+  const claimed = d.claimed.filter((id) => { const q = QUESTS.find((x) => x.id === id); return q && clicks >= q.clicks; });
+  const gifts = d.gifts.filter((id) => SKINS.some((x) => x.id === id));
+  const owned = Array.from(new Set(["base", ...d.owned.filter((id) => { const sk = SKINS.find((x) => x.id === id); return sk && (clicks >= sk.clicks || gifts.includes(id)); })]));
+  const earned = Math.floor(clicks / COIN_EVERY) + claimed.reduce((a, id) => a + (QUESTS.find((x) => x.id === id)?.reward ?? 0), 0) + Math.max(0, d.bonus || 0);
+  const coins = Math.max(0, Math.min(Math.floor(d.coins) || 0, earned - Math.max(0, d.spent || 0)));
+  return { clicks, coins, owned, skin: owned.includes(d.skin) ? d.skin : "base", claimed, bonus: Math.max(0, d.bonus || 0), spent: Math.max(0, d.spent || 0), gifts };
+}
+const AC_MAX_CPS = 20;
+
 function Bolt() {
   return (
     <svg viewBox="0 0 100 200" className="bolt absolute inset-0 m-auto h-full text-spark pointer-events-none">
@@ -136,6 +152,11 @@ function Index() {
   const [folder, setFolder] = useState<Rarity | null>(null);
   const [credits, setCredits] = useState(false);
   const [claimed, setClaimed] = useState<string[]>([]);
+  const [bonus, setBonus] = useState(0);
+  const [spent, setSpent] = useState(0);
+  const [gifts, setGifts] = useState<string[]>([]);
+  const clickTimes = useRef<number[]>([]);
+  const [cheat, setCheat] = useState("");
   const [wall, setWall] = useState("");
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const pressRef = useRef<number | null>(null);
@@ -173,26 +194,29 @@ function Index() {
 
   useEffect(() => {
     const read = (k: string) => { try { return JSON.parse(localStorage.getItem(k) || "null"); } catch { return null; } };
-    const s = read("chibi") || read("chibi_bak");
-    if (s) {
-      if (Number.isFinite(s.clicks)) setClicks(s.clicks);
-      if (Number.isFinite(s.coins)) setCoins(s.coins);
-      if (Array.isArray(s.owned)) setOwned(Array.from(new Set(["base", ...s.owned])));
-      if (typeof s.skin === "string") setSkin(s.skin);
-      if (Array.isArray(s.claimed)) setClaimed(s.claimed);
+    const ok = (v: any) => v && v.d && v.sig === acSign(v.d) ? v.d : null;
+    const raw = read("chibi"), bak = read("chibi_bak");
+    let d = ok(raw) || ok(bak);
+    const legacy = (v: any) => v && !v.sig && Number.isFinite(v.clicks) ? { ...v, bonus: Math.min(50, v.coins || 0), spent: 0, gifts: v.owned || [] } : null;
+    if (!d) d = legacy(raw) || legacy(bak);
+    if (!d && (raw || bak)) { setCheat("сохранение было изменено вручную — прогресс сброшен"); }
+    if (d) {
+      const c = acSanitize({ clicks: d.clicks, coins: d.coins, owned: Array.isArray(d.owned) ? d.owned : [], skin: String(d.skin), claimed: Array.isArray(d.claimed) ? d.claimed : [], bonus: d.bonus, spent: d.spent, gifts: Array.isArray(d.gifts) ? d.gifts : [] });
+      if (c.coins !== d.coins || c.owned.length !== (d.owned?.length ?? 0)) setCheat("найдены нечестные коины или скины — они убраны");
+      setClicks(c.clicks); setCoins(c.coins); setOwned(c.owned); setSkin(c.skin); setClaimed(c.claimed); setBonus(c.bonus); setSpent(c.spent); setGifts(c.gifts);
     }
     try { setWall(localStorage.getItem("chibi_wall") || ""); } catch {}
     setLoaded(true);
   }, []);
-  const stateRef = { clicks, coins, owned, skin, claimed };
+  const stateRef = acSanitize({ clicks, coins, owned, skin, claimed, bonus, spent, gifts });
   useEffect(() => {
     if (!loaded) return;
-    const save = () => { try { const v = JSON.stringify(stateRef); localStorage.setItem("chibi", v); localStorage.setItem("chibi_bak", v); } catch {} };
+    const save = () => { try { const v = JSON.stringify({ d: stateRef, sig: acSign(stateRef) }); localStorage.setItem("chibi", v); localStorage.setItem("chibi_bak", v); } catch {} };
     save();
     window.addEventListener("pagehide", save);
     document.addEventListener("visibilitychange", save);
     return () => { window.removeEventListener("pagehide", save); document.removeEventListener("visibilitychange", save); };
-  }, [clicks, coins, owned, skin, claimed, loaded]);
+  }, [clicks, coins, owned, skin, claimed, bonus, spent, gifts, loaded]);
   const setWallpaper = (file: File) => {
     if (file.type === "image/gif") {
       if (file.size > 3_500_000) { alert("гифка слишком большая — до 3,5 МБ"); return; }
@@ -215,6 +239,9 @@ function Index() {
   };
 
   const click = (e: React.MouseEvent<HTMLButtonElement>) => {
+    if (!e.isTrusted) return;
+    const t = performance.now(); clickTimes.current = [...clickTimes.current.filter((x) => t - x < 1000), t];
+    if (clickTimes.current.length > AC_MAX_CPS) { setCheat("слишком быстро — похоже на автокликер"); return; }
     const r = e.currentTarget.getBoundingClientRect();
     const n = clicks + 1;
     setClicks(n);
@@ -226,7 +253,7 @@ function Index() {
   };
   const unlock = (s: (typeof SKINS)[number]) => {
     if (clicks < s.clicks || coins < s.cost) return;
-    setCoins((c) => c - s.cost);
+    setCoins((c) => c - s.cost); setSpent((x) => x + s.cost);
     setOwned((o) => [...o, s.id]);
     setSkin(s.id);
     setZap(true);
@@ -354,10 +381,10 @@ function Index() {
           </div>
         </section>
 
-        <Wheel cls={winCls("fortune")} style={winStyle("fortune")} onFocus={() => focus("fortune")} onWin={(n, epic) => { if (epic) { setOwned((o) => (o.includes("alisa") ? o : [...o, "alisa"])); if (owned.includes("alisa")) setCoins((c) => c + 25); } else setCoins((c) => c + n); }} onClose={() => close("fortune")} />
+        <Wheel cls={winCls("fortune")} style={winStyle("fortune")} onFocus={() => focus("fortune")} onWin={(n, epic) => { if (epic) { setGifts((g) => [...g, "alisa"]); setOwned((o) => (o.includes("alisa") ? o : [...o, "alisa"])); if (owned.includes("alisa")) { setBonus((b) => b + 25); setCoins((c) => c + 25); } } else { setBonus((b) => b + Math.min(3, n)); setCoins((c) => c + Math.min(3, n)); } }} onClose={() => close("fortune")} />
 
         <ScratchPolaroid cls={winCls("scratch")} style={winStyle("scratch")} onFocus={() => focus("scratch")} onClose={() => close("scratch")}
-          owned={owned} onWin={(id: string | null) => { const r = scratchReward(id, owned); if (r.coins) setCoins((c) => c + r.coins); else if (id) setOwned((o) => (o.includes(id) ? o : [...o, id])); }} />
+          owned={owned} onWin={(id: string | null) => { const r = scratchReward(id, owned); if (r.coins) { setBonus((b) => b + r.coins); setCoins((c) => c + r.coins); } else if (id) { setGifts((g) => [...g, id]); setOwned((o) => (o.includes(id) ? o : [...o, id])); } }} />
 
         <section className={winCls("quests")} style={winStyle("quests")} onPointerDown={() => focus("quests")}>
           <TitleBar title="задания.exe" onClose={() => close("quests")} right={<span className="text-xs">{claimed.length}/{QUESTS.length}</span>} />
@@ -398,17 +425,25 @@ function Index() {
       {menu && (
         <div className="ctxmenu fixed z-[60] w-44" style={{ left: menu.x, top: menu.y }} onClick={(e) => e.stopPropagation()}>
           <button className="ctxitem" onClick={() => { setMenu(null); focus("wallpaper"); }}>сменить обои</button>
-          <button className="ctxitem" onClick={() => { setMenu(null); setCredits(true); }}>о программе</button>
+          <button className="ctxitem" onClick={() => { setMenu(null); setCredits(true); }}>о системе</button>
         </div>
       )}
 
-      {/* окошко «о программе» */}
+      {cheat && (
+        <div className="fixed inset-x-0 bottom-4 z-[70] flex justify-center px-4" onClick={() => setCheat("")}>
+          <div className="pill px-4 py-2 text-sm bg-card">античит: {cheat}</div>
+        </div>
+      )}
+
+      {/* окошко «о системе» */}
       {credits && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/40" onClick={() => setCredits(false)}>
           <section className="pill overflow-hidden winopen w-full max-w-xs" onClick={(e) => e.stopPropagation()}>
-            <TitleBar title="о программе" onClose={() => setCredits(false)}  />
+            <TitleBar title="о системе" onClose={() => setCredits(false)}  />
             <div className="p-4 flex flex-col gap-3 text-sm">
               <div>сделано <a href="https://t.me/circleofffortune" target="_blank" rel="noreferrer" className="text-primary underline underline-offset-2">колесом фортуны</a></div>
+              <div>андрей — <a href="https://t.me/pyrokinesistg" target="_blank" rel="noreferrer" className="text-primary underline underline-offset-2">@pyrokinesistg</a></div>
+              <div>алиса — <a href="https://t.me/wkupalice" target="_blank" rel="noreferrer" className="text-primary underline underline-offset-2">@wkupalice</a></div>
               <div>арт — <a href="https://t.me/w2iksi" target="_blank" rel="noreferrer" className="text-primary underline underline-offset-2">веикси</a></div>
               <button onClick={() => setCredits(false)} className="xpbtn px-4 py-1 text-primary-foreground self-end mt-1">ок</button>
             </div>
