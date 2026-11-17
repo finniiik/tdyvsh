@@ -8,10 +8,10 @@ import pikachu from "@/assets/chibi_andrey_pikachu.png";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Чиби Андрей — кликер" },
-      { name: "description", content: "Уютный кликер с чиби Андреем и скинами." },
-      { property: "og:title", content: "Чиби Андрей — кликер" },
-      { property: "og:description", content: "Кликай, копи чиби коины, открывай скины." },
+      { title: "чиби андрей пирокинезис" },
+      { name: "description", content: "просто чиби кликер:)))" },
+      { property: "og:title", content: "чиби андрей пирокинезис" },
+      { property: "og:description", content: "просто чиби кликер:)))" },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
