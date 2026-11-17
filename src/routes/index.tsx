@@ -82,6 +82,24 @@ const WINS: { id: WinId; title: string }[] = [
   { id: "quests", title: "задания" },
   { id: "scratch", title: "полароид" },
 ];
+export const CELL_W = 88, CELL_H = 84;
+type Cell = { c: number; r: number };
+/** Раскладка значков: сохранённые позиции остаются, остальные встают в первые свободные клетки. */
+export function layoutIcons(ids: string[], saved: Record<string, Cell>, cols: number) {
+  const out: Record<string, Cell> = {}, busy = new Set<string>();
+  for (const id of ids) { const p = saved[id]; if (p && p.c < cols && !busy.has(`${p.c},${p.r}`)) { out[id] = { c: p.c, r: p.r }; busy.add(`${p.c},${p.r}`); } }
+  let i = 0;
+  for (const id of ids) { if (out[id]) continue; while (busy.has(`${i % cols},${Math.floor(i / cols)}`)) i++; out[id] = { c: i % cols, r: Math.floor(i / cols) }; busy.add(`${i % cols},${Math.floor(i / cols)}`); }
+  return out;
+}
+/** Бросили значок в клетку: если она занята — значки меняются местами. */
+export function dropIcon(pos: Record<string, Cell>, id: string, c: number, r: number) {
+  const n = { ...pos }, from = n[id]!;
+  const other = Object.keys(n).find((k) => k !== id && n[k]!.c === c && n[k]!.r === r);
+  if (other) n[other] = { ...from };
+  n[id] = { c, r };
+  return n;
+}
 function FolderIco({ cls = "" }: { cls?: string }) {
   return (
     <svg viewBox="0 0 48 40" className={`w-12 h-10 ${cls}`}>
@@ -121,10 +139,36 @@ function Index() {
   const [wall, setWall] = useState("");
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const pressRef = useRef<number | null>(null);
-  const [order, setOrder] = useState<WinId[]>(() => WINS.map((w) => w.id));
-  const [dragId, setDragId] = useState<WinId | null>(null);
-  useEffect(() => { try { const o = JSON.parse(localStorage.getItem("chibi_order") || "null"); if (Array.isArray(o)) setOrder([...o.filter((x: WinId) => WINS.some((w) => w.id === x)), ...WINS.map((w) => w.id).filter((x) => !o.includes(x))]); } catch {} }, []);
-  const moveIcon = (to: WinId) => { if (!dragId || dragId === to) return; setOrder((o) => { const n = o.filter((x) => x !== dragId); n.splice(n.indexOf(to), 0, dragId); localStorage.setItem("chibi_order", JSON.stringify(n)); return n; }); };
+  const deskRef = useRef<HTMLDivElement>(null);
+  const movedRef = useRef(false);
+  const [cols, setCols] = useState(4);
+  const [pos, setPos] = useState<Record<string, { c: number; r: number }>>({});
+  const [drag, setDrag] = useState<{ id: WinId; x: number; y: number; tc: number; tr: number } | null>(null);
+  useEffect(() => {
+    const fit = () => setCols(Math.max(3, Math.floor((deskRef.current?.clientWidth ?? 360) / CELL_W)));
+    fit(); window.addEventListener("resize", fit); return () => window.removeEventListener("resize", fit);
+  }, [boot]);
+  useEffect(() => { let saved: Record<string, { c: number; r: number }> = {}; try { saved = JSON.parse(localStorage.getItem("chibi_pos") || "{}") || {}; } catch {} setPos(layoutIcons(WINS.map((w) => w.id), saved, cols)); }, [cols]);
+  const startDrag = (e: React.PointerEvent<HTMLButtonElement>, id: WinId) => {
+    if (e.button > 0) return;
+    const box = deskRef.current!.getBoundingClientRect(), el = e.currentTarget.getBoundingClientRect();
+    const ox = e.clientX - el.left, oy = e.clientY - el.top, sx = e.clientX, sy = e.clientY;
+    const touch = e.pointerType !== "mouse"; let armed = !touch, active = false; movedRef.current = false;
+    const hold = touch ? window.setTimeout(() => { armed = true; navigator.vibrate?.(15); }, 250) : 0;
+    const move = (ev: PointerEvent) => {
+      if (!armed) { if (Math.hypot(ev.clientX - sx, ev.clientY - sy) > 8) { clearTimeout(hold); cleanup(); } return; }
+      if (!active && Math.hypot(ev.clientX - sx, ev.clientY - sy) < 5) return;
+      active = true; movedRef.current = true; ev.preventDefault();
+      const x = ev.clientX - box.left - ox, y = ev.clientY - box.top - oy;
+      setDrag({ id, x, y, tc: Math.min(cols - 1, Math.max(0, Math.round(x / CELL_W))), tr: Math.max(0, Math.round(y / CELL_H)) });
+    };
+    const up = () => { clearTimeout(hold); cleanup();
+      setDrag((d) => { if (d) setPos((p) => { const n = dropIcon(p, d.id, d.tc, d.tr); try { localStorage.setItem("chibi_pos", JSON.stringify(n)); } catch {} return n; }); return null; });
+      setTimeout(() => { movedRef.current = false; }, 0); };
+    const cleanup = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up); };
+    window.addEventListener("pointermove", move, { passive: false }); window.addEventListener("pointerup", up); window.addEventListener("pointercancel", up);
+  };
+  const deskH = (Math.max(0, ...Object.values(pos).map((p) => p.r), drag?.tr ?? 0) + 1) * CELL_H;
   useEffect(() => { const t = setTimeout(() => setBoot(false), 2600); return () => clearTimeout(t); }, []);
 
   useEffect(() => {
@@ -150,6 +194,12 @@ function Index() {
     return () => { window.removeEventListener("pagehide", save); document.removeEventListener("visibilitychange", save); };
   }, [clicks, coins, owned, skin, claimed, loaded]);
   const setWallpaper = (file: File) => {
+    if (file.type === "image/gif") {
+      if (file.size > 3_500_000) { alert("гифка слишком большая — до 3,5 МБ"); return; }
+      const fr = new FileReader();
+      fr.onload = () => { const d = String(fr.result); try { localStorage.setItem("chibi_wall", d); } catch { alert("гифка не влезла в память, она будет до перезагрузки"); } setWall(d); };
+      fr.readAsDataURL(file); return;
+    }
     const img = new Image();
     img.onload = () => {
       const k = Math.min(1, 2560 / Math.max(img.width, img.height));
@@ -219,24 +269,18 @@ function Index() {
         </div>
       </div>
 
-      {/* значки на рабочем столе */}
-      <div className="flex gap-4 mb-4 flex-wrap justify-center sm:justify-start">
-        {order.map((id) => WINS.find((w) => w.id === id)!).map((w) => (
-          <button key={w.id} data-icon={w.id} onClick={() => focus(w.id)}
-            draggable onDragStart={() => setDragId(w.id)} onDragEnd={() => setDragId(null)}
-            onDragOver={(e) => { e.preventDefault(); moveIcon(w.id); }}
-            onPointerDown={(e) => { if (e.pointerType === "mouse") return; const id = w.id; pressRef.current = window.setTimeout(() => { setDragId(id); navigator.vibrate?.(15); }, 300); }}
-            onPointerMove={(e) => { if (e.pointerType === "mouse" || !dragId) return; const el = document.elementFromPoint(e.clientX, e.clientY)?.closest("[data-icon]") as HTMLElement | null; if (el) moveIcon(el.dataset["icon"] as WinId); }}
-            onPointerUp={() => { if (pressRef.current) clearTimeout(pressRef.current); setTimeout(() => setDragId(null), 0); }}
-            onPointerCancel={() => { if (pressRef.current) clearTimeout(pressRef.current); setDragId(null); }}
-            onClickCapture={(e) => { if (dragId) { e.preventDefault(); e.stopPropagation(); } }}
+      {/* значки на рабочем столе — свободное размещение по сетке, как в Windows */}
+      <div ref={deskRef} className="relative mb-4" style={{ height: deskH }}>
+        {WINS.map((w) => { const p = pos[w.id] ?? { c: 0, r: 0 }; const d = drag?.id === w.id; return (
+          <button key={w.id} onClick={() => { if (!movedRef.current) focus(w.id); }}
+            onPointerDown={(e) => startDrag(e, w.id)}
             onContextMenu={(e) => e.preventDefault()}
-            style={{ touchAction: "none" }}
-            className={`${dragId === w.id ? "icon-drag " : ""}flex flex-col items-center gap-1 w-20 text-primary-foreground select-none active:scale-95 transition-transform`}>
+            style={{ position: "absolute", left: d ? drag.x : p.c * CELL_W, top: d ? drag.y : p.r * CELL_H, touchAction: "none", zIndex: d ? 5 : 1 }}
+            className={`${d ? "icon-drag " : ""}flex flex-col items-center gap-1 w-20 text-primary-foreground select-none`}>
             <FolderIco />
             <span className="text-[11px] leading-tight text-center drop-shadow">{w.title}</span>
-          </button>
-        ))}
+          </button>); })}
+        {drag && <div className="absolute w-20 h-[72px] rounded-md border-2 border-dashed border-primary-foreground/70 pointer-events-none" style={{ left: drag.tc * CELL_W, top: drag.tr * CELL_H }} />}
       </div>
 
       <div>
@@ -342,7 +386,7 @@ function Index() {
             <div className="w-full aspect-video rounded-md border-2 border-border desktop" style={wall ? { backgroundImage: `url(${wall})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined} />
             <div className="flex gap-2">
               <label className="xpbtn px-4 py-1 text-primary-foreground cursor-pointer">выбрать
-                <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) setWallpaper(f); e.target.value = ""; }} />
+                <input type="file" accept="image/*,.gif" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) setWallpaper(f); e.target.value = ""; }} />
               </label>
               <button onClick={() => { setWall(""); try { localStorage.removeItem("chibi_wall"); } catch {} }} className="xpbtn px-4 py-1 text-primary-foreground">сбросить</button>
             </div>
