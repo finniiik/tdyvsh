@@ -165,7 +165,7 @@
   --accent: oklch(0.88 0.07 350);
   --border: oklch(0.38 0.08 355);
   --spark: oklch(0.93 0.14 330);
-  --scene: linear-gradient(180deg, oklch(0.86 0.08 345), oklch(0.93 0.05 20) 60%, oklch(0.8 0.09 350));
+  --scene: linear-gradient(180deg, oklch(0.8 0.045 345), oklch(0.88 0.03 20) 60%, oklch(0.74 0.05 350));
 }
 @theme inline { --color-spark: var(--spark); --font-cute: "Zaychik", system-ui, sans-serif; }
 body { font-family: var(--font-cute); background: radial-gradient(circle at 30% 10%, oklch(0.97 0.03 350), var(--background)); }
@@ -213,8 +213,32 @@ body { font-family: var(--font-cute); background: radial-gradient(circle at 30% 
 .xpbtn { border-radius: 99px; border: 2.5px solid var(--border); background: linear-gradient(180deg, oklch(0.8 0.12 355), var(--primary) 50%, oklch(0.6 0.17 355)); box-shadow: 0 3px 0 var(--border), inset 0 1px 0 oklch(1 0 0 / 50%); }
 .xpbtn:active { translate: 0 2px; box-shadow: 0 1px 0 var(--border); }
 
-.oswin { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(28rem, calc(100vw - 1.5rem)); max-height: calc(100dvh - 8rem); top: calc(50% + 3rem); overflow: auto; }
+.oswin { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(28rem, calc(100vw - 1.5rem)); max-height: calc(100dvh - 10rem); top: calc(50% + 3.2rem); overflow: auto; }
 .oswin-wrap { display: contents; }
 .oswin-back { filter: saturate(.7) brightness(.97); }
 @keyframes oswinopen { 0%{opacity:0;transform:translate(-50%,-40%) scale(.7)} 100%{opacity:1;transform:translate(-50%,-50%)} }
 .oswin.winopen { animation: oswinopen .35s cubic-bezier(.2,1.3,.4,1); }
+.pill { border-radius: 0; }
+.winbtn { width: 22px; height: 20px; display: grid; place-items: center; font-size: 12px; line-height: 1; background: var(--card); color: var(--foreground); border: 2px solid var(--border); }
+.polaroid { background: var(--card); padding: 14px 14px 22px; }
+.photo { background: var(--scene); border: 2.5px solid var(--border); }
+.card { border-radius: 0; background: var(--card); padding: 8px 8px 14px; outline-offset: -4px; }
+.card-art { border-radius: 0; }
+.desktop { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.pill, .card, .card-art, .photo, .winbtn { border-radius: 6px; }
+.desktop, body { background: oklch(0.66 0.032 350); }
+.menubar { position: fixed; top: 0; left: 0; right: 0; z-index: 40; display: flex; align-items: center; gap: 10px; height: 30px; padding: 0 10px; font-size: 13px; color: var(--primary-foreground); background: linear-gradient(180deg, oklch(0.46 0.05 355), oklch(0.36 0.055 355)); border-bottom: 2px solid var(--border); }
+.menubar-brand { font-weight: 700; letter-spacing: .3px; }
+.menubar-item { opacity: .8; max-width: 40vw; }
+.tray { display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; border: 2px solid oklch(0.28 0.05 355); border-radius: 5px; background: oklch(0.52 0.05 355); box-shadow: inset 0 1px 0 oklch(1 0 0 / 18%); animation: tray-pop .35s ease; }
+@keyframes tray-pop { 0% { transform: scale(1.25); } 100% { transform: scale(1); } }
+.statusbar { position: sticky; bottom: 0; display: flex; align-items: center; gap: 8px; padding: 5px 10px; font-size: 11px; color: var(--muted-foreground); background: color-mix(in oklab, var(--muted) 55%, var(--card)); border-top: 2.5px solid var(--border); }
+.ctxmenu { background: var(--card); border: 2.5px solid var(--border); border-radius: 6px; box-shadow: 3px 3px 0 color-mix(in oklab, var(--border) 60%, transparent); padding: 3px; }
+.ctxitem { display: block; width: 100%; text-align: left; padding: 5px 10px; font-size: 13px; border-radius: 3px; }
+.ctxitem:hover { background: var(--primary); color: var(--primary-foreground); }
+@keyframes oswinsoft { 0%{opacity:0;transform:translate(-50%,-47%) scale(.94);filter:blur(4px)} 100%{opacity:1;transform:translate(-50%,-50%) scale(1);filter:blur(0)} }
+.oswin.winopen { animation: oswinsoft .42s cubic-bezier(.22,1,.36,1) both; }
+.ctxmenu { animation: ctxin .16s ease-out both; transform-origin: top left; }
+@keyframes ctxin { from { opacity:0; transform: scale(.92); } to { opacity:1; transform:none; } }
+.icon-drag { opacity: .4; }
+html, body { overscroll-behavior: none; }
