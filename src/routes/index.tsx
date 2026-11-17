@@ -3,6 +3,9 @@ import { useEffect, useRef, useState } from "react";
 import base from "@/assets/chibi_andrey_updated.png";
 import y2018 from "@/assets/chibi_andrey_2018_updated.png";
 import alisa from "@/assets/chibi_alisa_updated.png";
+import { Button } from "@/components/ui/button";
+import { SecretExplorer } from "@/components/secret-explorer";
+import { SECRET_ROOTS, deleteSecretFolder, scatterFolders, type SecretNode } from "@/lib/secret-folders";
 import pikachu from "@/assets/chibi_andrey_pikachu.png";
 
 export const Route = createFileRoute("/")({
@@ -110,8 +113,9 @@ export function layoutIcons(ids: string[], saved: Record<string, Cell>, cols: nu
 }
 /** Бросили значок в клетку: если она занята — значки меняются местами. */
 export function dropIcon(pos: Record<string, Cell>, id: string, c: number, r: number) {
-  const n = { ...pos }, from = n[id]!;
-  const other = Object.keys(n).find((k) => k !== id && n[k]!.c === c && n[k]!.r === r);
+  const n = { ...pos }, from = n[id];
+  if (!from) return n;
+  const other = Object.keys(n).find((k) => k !== id && n[k]?.c === c && n[k]?.r === r);
   if (other) n[other] = { ...from };
   n[id] = { c, r };
   return n;
@@ -163,16 +167,23 @@ function Index() {
   const deskRef = useRef<HTMLDivElement>(null);
   const movedRef = useRef(false);
   const [cols, setCols] = useState(4);
+  const [deletedFolders, setDeletedFolders] = useState<string[]>([]);
+  const [secretRoot, setSecretRoot] = useState<SecretNode | null>(null);
+  const [folderMenu, setFolderMenu] = useState<{ id: string; x: number; y: number } | null>(null);
+  useEffect(() => { try { const saved = JSON.parse(localStorage.getItem("chibi_deleted_folders_v1") || "[]"); if (Array.isArray(saved)) setDeletedFolders(saved.filter((id): id is string => typeof id === "string")); } catch {} }, []);
+  const removeFolder = (id: string) => { setDeletedFolders(previous => { const next = deleteSecretFolder(previous, id); try { localStorage.setItem("chibi_deleted_folders_v1", JSON.stringify(next)); } catch {} return next; }); setSecretRoot(null); setFolderMenu(null); };
+  const deskIcons = [...WINS, ...SECRET_ROOTS.filter(node => !deletedFolders.includes(node.id)).map(node => ({ id: node.id, title: node.name }))];
   const [pos, setPos] = useState<Record<string, { c: number; r: number }>>({});
-  const [drag, setDrag] = useState<{ id: WinId; x: number; y: number; tc: number; tr: number } | null>(null);
+  const [drag, setDrag] = useState<{ id: string; x: number; y: number; tc: number; tr: number } | null>(null);
   useEffect(() => {
     const fit = () => setCols(Math.max(3, Math.floor((deskRef.current?.clientWidth ?? 360) / CELL_W)));
     fit(); window.addEventListener("resize", fit); return () => window.removeEventListener("resize", fit);
   }, [boot]);
-  useEffect(() => { let saved: Record<string, { c: number; r: number }> = {}; try { saved = JSON.parse(localStorage.getItem("chibi_pos") || "{}") || {}; } catch {} setPos(layoutIcons(WINS.map((w) => w.id), saved, cols)); }, [cols]);
-  const startDrag = (e: React.PointerEvent<HTMLButtonElement>, id: WinId) => {
+  useEffect(() => { let saved: Record<string, { c: number; r: number }> = {}; try { saved = JSON.parse(localStorage.getItem("chibi_pos") || "{}") || {}; } catch {} const game = layoutIcons(WINS.map((w) => w.id), saved, cols); const next = scatterFolders(SECRET_ROOTS.filter(node => !deletedFolders.includes(node.id)).map(node => node.id), saved, cols, game); setPos(next); try { localStorage.setItem("chibi_pos", JSON.stringify(next)); } catch {} }, [cols, deletedFolders]);
+  const startDrag = (e: React.PointerEvent<HTMLButtonElement>, id: string) => {
     if (e.button > 0) return;
-    const box = deskRef.current!.getBoundingClientRect(), el = e.currentTarget.getBoundingClientRect();
+    if (!deskRef.current) return;
+    const box = deskRef.current.getBoundingClientRect(), el = e.currentTarget.getBoundingClientRect();
     const ox = e.clientX - el.left, oy = e.clientY - el.top, sx = e.clientX, sy = e.clientY;
     const touch = e.pointerType !== "mouse"; let armed = !touch, active = false; movedRef.current = false;
     const hold = touch ? window.setTimeout(() => { armed = true; navigator.vibrate?.(15); }, 250) : 0;
@@ -229,7 +240,7 @@ function Index() {
       const k = Math.min(1, 2560 / Math.max(img.width, img.height));
       const c = document.createElement("canvas");
       c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
-      c.getContext("2d")!.drawImage(img, 0, 0, c.width, c.height);
+      const context = c.getContext("2d"); if (!context) return; context.drawImage(img, 0, 0, c.width, c.height);
       let q = 0.85, d = c.toDataURL("image/jpeg", q);
       while (d.length > 3_000_000 && q > 0.4) { q -= 0.1; d = c.toDataURL("image/jpeg", q); }
       try { localStorage.setItem("chibi_wall", d); } catch {}
@@ -259,7 +270,8 @@ function Index() {
     setZap(true);
     setTimeout(() => setZap(false), 1700);
   };
-  const cur = SKINS.find((s) => s.id === skin)!;
+  const cur = SKINS.find((s) => s.id === skin) ?? SKINS[0];
+  if (!cur) return null;
   const prog = (clicks % COIN_EVERY) / COIN_EVERY;
   const focus = (id: WinId) => setStack((s) => [...s.filter((x) => x !== id), id]);
   const close = (id: WinId) => setStack((s) => s.filter((x) => x !== id));
@@ -281,7 +293,7 @@ function Index() {
   return (
     <main className="min-h-screen p-4 pt-11 desktop"
       style={wall ? { backgroundImage: `url(${wall})`, backgroundSize: "cover", backgroundPosition: "center", backgroundAttachment: "fixed" } : undefined}
-      onClick={() => setMenu(null)}
+      onClick={() => { setMenu(null); setFolderMenu(null); }}
       onContextMenu={(e) => { if (!isDesktopBg(e)) return; e.preventDefault(); openMenu(e.clientX, e.clientY); }}
       onPointerDown={(e) => { if (e.pointerType === "mouse" || !isDesktopBg(e)) return; const { clientX, clientY } = e; pressRef.current = window.setTimeout(() => openMenu(clientX, clientY), 550); }}
       onPointerUp={() => { if (pressRef.current) { clearTimeout(pressRef.current); pressRef.current = null; } }}
@@ -298,15 +310,15 @@ function Index() {
 
       {/* значки на рабочем столе — свободное размещение по сетке, как в Windows */}
       <div ref={deskRef} className="relative mb-4" style={{ height: deskH }}>
-        {WINS.map((w) => { const p = pos[w.id] ?? { c: 0, r: 0 }; const d = drag?.id === w.id; return (
-          <button key={w.id} onClick={() => { if (!movedRef.current) focus(w.id); }}
+        {deskIcons.map((w) => { const p = pos[w.id] ?? { c: 0, r: 0 }; const d = drag?.id === w.id; return (
+          <Button variant="osFile" key={w.id} data-folder-id={w.id} onClick={() => { if (movedRef.current) return; const secret = SECRET_ROOTS.find(node => node.id === w.id); if (secret) setSecretRoot(secret); else { const win = WINS.find(win => win.id === w.id); if (win) focus(win.id); } }}
             onPointerDown={(e) => startDrag(e, w.id)}
-            onContextMenu={(e) => e.preventDefault()}
+            onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); if (SECRET_ROOTS.some(node => node.id === w.id)) setFolderMenu({ id: w.id, x: Math.min(e.clientX, window.innerWidth - 180), y: Math.min(e.clientY, window.innerHeight - 80) }); }}
             style={{ position: "absolute", left: d ? drag.x : p.c * CELL_W, top: d ? drag.y : p.r * CELL_H, touchAction: "none", zIndex: d ? 5 : 1 }}
-            className={`${d ? "icon-drag " : ""}flex flex-col items-center gap-1 w-20 text-primary-foreground select-none`}>
+            className={`${d ? "icon-drag " : ""}desktop-file`}>
             <FolderIco />
             <span className="text-[11px] leading-tight text-center drop-shadow">{w.title}</span>
-          </button>); })}
+          </Button>); })}
         {drag && <div className="absolute w-20 h-[72px] rounded-md border-2 border-dashed border-primary-foreground/70 pointer-events-none" style={{ left: drag.tc * CELL_W, top: drag.tr * CELL_H }} />}
       </div>
 
@@ -421,6 +433,9 @@ function Index() {
         </section>
       </div>
 
+      {secretRoot && <SecretExplorer key={secretRoot.id} root={secretRoot} onClose={() => setSecretRoot(null)} onDelete={() => removeFolder(secretRoot.id)} />}
+      {folderMenu && <div className="ctxmenu fixed z-[60] w-44" style={{ left: folderMenu.x, top: folderMenu.y }} onClick={e => e.stopPropagation()}><Button variant="osFile" className="ctxitem" onClick={() => removeFolder(folderMenu.id)}>удалить папку</Button></div>}
+
       {/* контекстное меню рабочего стола */}
       {menu && (
         <div className="ctxmenu fixed z-[60] w-44" style={{ left: menu.x, top: menu.y }} onClick={(e) => e.stopPropagation()}>
@@ -516,7 +531,7 @@ export const SCRATCH_COINS = 3;
 export const SCRATCH_CHIBI_CHANCE = 0.0000001;
 /** Обычно 3 коина; с шансом 0,0000001 — случайный чибик (если уже есть — 5 коинов). */
 export function rollScratch(rnd: () => number = Math.random): string | null {
-  return rnd() < SCRATCH_CHIBI_CHANCE ? SKINS[Math.floor(rnd() * SKINS.length)]!.id : null;
+  return rnd() < SCRATCH_CHIBI_CHANCE ? SKINS[Math.floor(rnd() * SKINS.length)]?.id ?? null : null;
 }
 export function scratchReward(id: string | null, owned: string[]) {
   if (!id) return { skin: null, coins: SCRATCH_COINS };
@@ -557,7 +572,7 @@ function ScratchPolaroid({ cls, style, onFocus, onClose, owned, onWin }: { cls: 
     const c = cv.current; if (!c || done) return;
     const r = c.getBoundingClientRect(); const d = window.devicePixelRatio || 1;
     c.width = r.width * d; c.height = r.height * d;
-    const g = c.getContext("2d")!; g.scale(d, d);
+    const g = c.getContext("2d"); if (!g) return; g.scale(d, d);
     const gr = g.createLinearGradient(0, 0, r.width, r.height);
     ["#ffb3d9", "#b8e0ff", "#d8c2ff", "#c2ffe4", "#fff1b3", "#ffb3d9"].forEach((col, i, a) => gr.addColorStop(i / (a.length - 1), col));
     g.fillStyle = gr; g.fillRect(0, 0, r.width, r.height);
@@ -568,7 +583,7 @@ function ScratchPolaroid({ cls, style, onFocus, onClose, owned, onWin }: { cls: 
   }, [done, prize, style.display]);
   const scratch = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!drawing.current || done) return;
-    const c = e.currentTarget, r = c.getBoundingClientRect(), g = c.getContext("2d")!;
+    const c = e.currentTarget, r = c.getBoundingClientRect(), g = c.getContext("2d"); if (!g) return;
     const sx = c.width / r.width, x = (e.clientX - r.left) * sx, y = (e.clientY - r.top) * sx;
     const pr = prev.current ?? { x, y };
     g.setTransform(1, 0, 0, 1, 0, 0);
@@ -580,7 +595,8 @@ function ScratchPolaroid({ cls, style, onFocus, onClose, owned, onWin }: { cls: 
   const check = () => {
     drawing.current = false; prev.current = null;
     const c = cv.current; if (!c || done || !prize) return;
-    const data = c.getContext("2d")!.getImageData(0, 0, c.width, c.height).data;
+    const g = c.getContext("2d"); if (!g || !c.width || !c.height) return;
+    const data = g.getImageData(0, 0, c.width, c.height).data;
     let clear = 0, n = 0;
     for (let i = 3; i < data.length; i += 64) { n++; if (data[i] === 0) clear++; }
     if (clear / n > 0.5) {

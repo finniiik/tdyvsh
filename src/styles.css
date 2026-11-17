@@ -254,3 +254,34 @@ html, body { overscroll-behavior: none; }
 /* переливающийся голографический полароид */
 .holo-frame { position: relative; border: 2.5px solid var(--border); border-radius: 6px; background: linear-gradient(120deg, oklch(0.92 0.06 350), oklch(0.92 0.06 230), oklch(0.92 0.06 300), oklch(0.94 0.06 160), oklch(0.95 0.07 90), oklch(0.92 0.06 350)); background-size: 300% 300%; animation: holo 4s ease-in-out infinite; box-shadow: 0 3px 0 var(--border); }
 @keyframes holo { 0%,100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+
+/* Secret explorer uses the original OS palette and chrome. */
+.os-button { background: var(--chrome); color: var(--primary-foreground); border: 2px solid var(--border); box-shadow: 0 2px 0 var(--border); }
+.os-icon-button { background: var(--card); color: var(--foreground); border: 2px solid var(--border); flex-shrink: 0; }
+.os-file-button { color: var(--foreground); background: transparent; border: 0; border-radius: 4px; white-space: normal; height: auto; }
+.os-file-button:hover, .os-icon-button:hover { background: var(--accent); }
+.desktop-file { display: flex; flex-direction: column; gap: 4px; width: 80px; min-height: 76px; padding: 0; color: var(--primary-foreground); font-size: 11px; line-height: 1.15; }
+.desktop-file > svg { width: 48px; height: 40px; }
+.desktop-file > span { max-width: 80px; overflow-wrap: anywhere; }
+.secret-overlay { position: fixed; inset: 0; z-index: 45; display: flex; align-items: center; justify-content: center; padding: 12px; background: color-mix(in oklab, var(--foreground) 25%, transparent); }
+.secret-window { width: min(560px, 100%); max-height: calc(100dvh - 64px); display: flex; flex-direction: column; overflow: hidden; }
+.secret-title { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 5px 7px 5px 12px; }
+.secret-title > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.secret-title .os-icon-button { width: 25px; height: 25px; padding: 2px; }
+.secret-toolbar { display: flex; align-items: center; gap: 8px; padding: 8px; border-bottom: 2px solid var(--border); }
+.secret-address { flex: 1; min-width: 0; max-height: 44px; overflow: auto; overflow-wrap: anywhere; font-size: 12px; }
+.secret-content { padding: 16px; min-height: 180px; overflow: auto; }
+.secret-files { display: flex; flex-wrap: wrap; gap: 12px; }
+.secret-files .os-file-button { display: flex; flex-direction: column; gap: 8px; width: 100px; min-height: 90px; padding: 8px; font-size: 12px; }
+.secret-files .os-file-button svg { width: 44px; height: 40px; color: var(--primary); fill: color-mix(in oklab, var(--primary) 25%, transparent); }
+.secret-files span { overflow-wrap: anywhere; max-width: 100%; }
+.secret-photo { display: block; width: 100%; max-height: calc(100dvh - 230px); object-fit: contain; }
+.secret-video { display: block; width: 100%; max-height: calc(100dvh - 230px); background: var(--foreground); }
+.secret-lock-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 16px; background: color-mix(in oklab, var(--foreground) 35%, transparent); }
+.secret-lock { width: min(380px, 100%); overflow: hidden; }
+.secret-form { padding: 18px; display: flex; flex-direction: column; gap: 10px; font-size: 14px; }
+.secret-lock-symbol { width: 36px; height: 36px; color: var(--primary); }
+.secret-form input { background: var(--card); border: 2px solid var(--border); border-radius: 3px; padding: 7px 10px; width: 100%; user-select: text; }
+.secret-error { min-height: 20px; color: var(--destructive); }
+.secret-actions { display: flex; justify-content: flex-end; gap: 8px; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; } }

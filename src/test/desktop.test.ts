@@ -4,8 +4,8 @@ import { layoutIcons, dropIcon } from "@/routes/index";
 describe("значки рабочего стола", () => {
   it("значок можно поставить в любую пустую клетку", () => {
     const p = dropIcon({ a: { c: 0, r: 0 }, b: { c: 1, r: 0 } }, "a", 3, 2);
-    expect(p.a).toEqual({ c: 3, r: 2 });
-    expect(p.b).toEqual({ c: 1, r: 0 });
+    expect(p['a']).toEqual({ c: 3, r: 2 });
+    expect(p['b']).toEqual({ c: 1, r: 0 });
   });
   it("в занятую клетку — меняются местами", () => {
     const p = dropIcon({ a: { c: 0, r: 0 }, b: { c: 1, r: 0 } }, "a", 1, 0);
