@@ -74,12 +74,13 @@ function Clock() {
   return <span className="tabular-nums">{t}</span>;
 }
 
-type WinId = "clicker" | "collection" | "fortune" | "quests" | "wallpaper";
+type WinId = "clicker" | "collection" | "fortune" | "quests" | "wallpaper" | "scratch";
 const WINS: { id: WinId; title: string }[] = [
   { id: "clicker", title: "пирочибиклик" },
   { id: "collection", title: "коллекция" },
   { id: "fortune", title: "фортуна" },
   { id: "quests", title: "задания" },
+  { id: "scratch", title: "полароид" },
 ];
 function FolderIco({ cls = "" }: { cls?: string }) {
   return (
@@ -311,6 +312,9 @@ function Index() {
 
         <Wheel cls={winCls("fortune")} style={winStyle("fortune")} onFocus={() => focus("fortune")} onWin={(n, epic) => { if (epic) { setOwned((o) => (o.includes("alisa") ? o : [...o, "alisa"])); if (owned.includes("alisa")) setCoins((c) => c + 25); } else setCoins((c) => c + n); }} onClose={() => close("fortune")} />
 
+        <ScratchPolaroid cls={winCls("scratch")} style={winStyle("scratch")} onFocus={() => focus("scratch")} onClose={() => close("scratch")}
+          owned={owned} onWin={(id: string | null) => { const r = scratchReward(id, owned); if (r.coins) setCoins((c) => c + r.coins); else if (id) setOwned((o) => (o.includes(id) ? o : [...o, id])); }} />
+
         <section className={winCls("quests")} style={winStyle("quests")} onPointerDown={() => focus("quests")}>
           <TitleBar title="задания.exe" onClose={() => close("quests")} right={<span className="text-xs">{claimed.length}/{QUESTS.length}</span>} />
           <div className="p-3 flex flex-col gap-2 max-h-[70vh] overflow-auto">
@@ -421,6 +425,111 @@ function Wheel({ onWin, onClose, cls, style, onFocus }: { onWin: (n: number, epi
         <button onClick={spin} disabled={spinning || left > 0} className="xpbtn px-6 py-1.5 text-primary-foreground disabled:opacity-60">
           {spinning ? "крутится..." : left > 0 ? `ждать ${mm}:${String(ss).padStart(2, "0")}` : "крутить"}
         </button>
+      </div>
+    </section>
+  );
+}
+
+
+export const SCRATCH_COOLDOWN = 24 * 60 * 60 * 1000;
+export const SCRATCH_DUP_COINS = 5;
+export const SCRATCH_COINS = 3;
+export const SCRATCH_CHIBI_CHANCE = 0.0000001;
+/** Обычно 3 коина; с шансом 0,0000001 — случайный чибик (если уже есть — 5 коинов). */
+export function rollScratch(rnd: () => number = Math.random): string | null {
+  return rnd() < SCRATCH_CHIBI_CHANCE ? SKINS[Math.floor(rnd() * SKINS.length)]!.id : null;
+}
+export function scratchReward(id: string | null, owned: string[]) {
+  if (!id) return { skin: null, coins: SCRATCH_COINS };
+  return owned.includes(id) ? { skin: null, coins: SCRATCH_DUP_COINS } : { skin: id, coins: 0 };
+}
+export const scratchLeft = (last: number, now: number) => Math.max(0, last + SCRATCH_COOLDOWN - now);
+
+function ScratchPolaroid({ cls, style, onFocus, onClose, owned, onWin }: { cls: string; style: React.CSSProperties; onFocus: () => void; onClose: () => void; owned: string[]; onWin: (id: string | null) => void }) {
+  const cv = useRef<HTMLCanvasElement>(null);
+  const [last, setLast] = useState(0);
+  const [now, setNow] = useState(0);
+  const [prize, setPrize] = useState<string>("");
+  const [done, setDone] = useState(false);
+  const [dup, setDup] = useState(false);
+  const [fresh, setFresh] = useState(false);
+  const drawing = useRef(false);
+  const prev = useRef<{ x: number; y: number } | null>(null);
+  useEffect(() => {
+    const l = Number(localStorage.getItem("chibi_scratch") || 0);
+    setLast(l); setNow(Date.now());
+    let p = localStorage.getItem("chibi_scratch_prize2");
+    if (p === null) { p = rollScratch() ?? "coins"; localStorage.setItem("chibi_scratch_prize2", p); }
+    setPrize(p);
+    if (scratchLeft(l, Date.now()) > 0) setDone(true);
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const left = scratchLeft(last, now);
+  // кулдаун кончился — новый полароид
+  useEffect(() => {
+    if (done && last && now && left === 0) {
+      const p = rollScratch() ?? "coins";
+      localStorage.setItem("chibi_scratch_prize2", p); setPrize(p); setDone(false); setDup(false);
+    }
+  }, [left, done, last, now]);
+  // рисуем голографический слой
+  useEffect(() => {
+    const c = cv.current; if (!c || done) return;
+    const r = c.getBoundingClientRect(); const d = window.devicePixelRatio || 1;
+    c.width = r.width * d; c.height = r.height * d;
+    const g = c.getContext("2d")!; g.scale(d, d);
+    const gr = g.createLinearGradient(0, 0, r.width, r.height);
+    ["#ffb3d9", "#b8e0ff", "#d8c2ff", "#c2ffe4", "#fff1b3", "#ffb3d9"].forEach((col, i, a) => gr.addColorStop(i / (a.length - 1), col));
+    g.fillStyle = gr; g.fillRect(0, 0, r.width, r.height);
+    g.fillStyle = "rgba(255,255,255,.55)";
+    for (let i = 0; i < 40; i++) { g.beginPath(); g.arc(Math.random() * r.width, Math.random() * r.height, Math.random() * 2 + .5, 0, 7); g.fill(); }
+    g.fillStyle = "rgba(90,40,70,.75)"; g.font = "20px Zaychik, sans-serif"; g.textAlign = "center";
+    g.fillText("сотри меня ✦", r.width / 2, r.height / 2);
+  }, [done, prize, style.display]);
+  const scratch = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!drawing.current || done) return;
+    const c = e.currentTarget, r = c.getBoundingClientRect(), g = c.getContext("2d")!;
+    const sx = c.width / r.width, x = (e.clientX - r.left) * sx, y = (e.clientY - r.top) * sx;
+    const pr = prev.current ?? { x, y };
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.globalCompositeOperation = "destination-out";
+    g.lineCap = "round"; g.lineWidth = 40 * sx;
+    g.beginPath(); g.moveTo(pr.x, pr.y); g.lineTo(x, y); g.stroke();
+    prev.current = { x, y };
+  };
+  const check = () => {
+    drawing.current = false; prev.current = null;
+    const c = cv.current; if (!c || done || !prize) return;
+    const data = c.getContext("2d")!.getImageData(0, 0, c.width, c.height).data;
+    let clear = 0, n = 0;
+    for (let i = 3; i < data.length; i += 64) { n++; if (data[i] === 0) clear++; }
+    if (clear / n > 0.5) {
+      const sk = prize === "coins" ? null : prize; setDup(!!sk && owned.includes(sk)); setFresh(!!sk && !owned.includes(sk)); setDone(true); onWin(sk);
+      const t = Date.now(); setLast(t); localStorage.setItem("chibi_scratch", String(t));
+    }
+  };
+  const s = SKINS.find((x) => x.id === prize);
+  const hh = Math.floor(left / 3600000), mm = Math.floor((left % 3600000) / 60000), ss = Math.floor((left % 60000) / 1000);
+  const p2 = (n: number) => String(n).padStart(2, "0");
+  return (
+    <section className={cls} style={style} onPointerDown={onFocus}>
+      <TitleBar title="полароид.exe" onClose={onClose} right={<span className="text-xs">раз в 24ч</span>} />
+      <div className="p-4 flex flex-col items-center gap-3">
+        <div className="polaroid holo-frame w-[min(16rem,70vw)]">
+          <div className="photo relative aspect-square overflow-hidden">
+            {!s && prize && <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-4xl">+{SCRATCH_COINS}<Coin /></div>}
+            {s && <img src={s.src} alt={done ? s.name : ""} draggable={false} className="absolute inset-[8%] w-[84%] h-[84%] object-contain" />}
+            {!done && <canvas ref={cv} className="absolute inset-0 w-full h-full cursor-grab" style={{ touchAction: "none" }}
+              onPointerDown={(e) => { drawing.current = true; prev.current = null; e.currentTarget.setPointerCapture(e.pointerId); scratch(e); }}
+              onPointerMove={scratch} onPointerUp={check} onPointerCancel={check} />}
+          </div>
+          <div className="text-center text-sm mt-2 h-5 truncate">{done ? (s ? s.name : "чиби коины") : "???"}</div>
+        </div>
+        <div className="text-sm text-center min-h-5 flex items-center gap-1">
+          {done && !s ? <>+{SCRATCH_COINS} <Coin small /> — чибик выпадает очень редко</> : done && s ? (dup ? <>уже есть — держи +{SCRATCH_DUP_COINS} <Coin small /></> : fresh ? "новый чибик в коллекции!" : "сегодняшний чибик") : <>+{SCRATCH_COINS} <Coin small /> или редчайший чибик</>}
+        </div>
+        {done && left > 0 && <div className="statusbar w-full justify-center rounded-md border-2">следующий через {p2(hh)}:{p2(mm)}:{p2(ss)}</div>}
       </div>
     </section>
   );
