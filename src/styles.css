@@ -288,3 +288,8 @@ html, body { overscroll-behavior: none; }
 
 .wheel-scene { contain: paint; overflow: hidden; }
 .oswin .titlebar { cursor: grab; touch-action: none; user-select: none; }
+.oswin { resize: both; min-width: 260px; min-height: 180px; max-width: 100vw; }
+[data-theme="dark"] { --background: oklch(0.22 0.03 350); --foreground: oklch(0.96 0.01 350); --card: oklch(0.28 0.035 350); --card-foreground: oklch(0.96 0.01 350); --muted: oklch(0.32 0.03 350); --muted-foreground: oklch(0.8 0.03 350); --accent: oklch(0.38 0.05 350); --border: oklch(0.12 0.02 350); --link: oklch(0.82 0.1 350); --desktop-label: oklch(0.15 0.02 350); --scene: linear-gradient(180deg, oklch(0.36 0.05 345), oklch(0.3 0.04 350)); }
+[data-theme="dark"] body, [data-theme="dark"] .desktop { background: oklch(0.2 0.025 350); }
+[data-theme="blue"] { --background: oklch(0.9 0.04 240); --card: oklch(0.97 0.015 240); --primary: oklch(0.62 0.13 240); --accent: oklch(0.86 0.06 240); --border: oklch(0.36 0.08 250); --link: oklch(0.42 0.12 250); --chrome: linear-gradient(180deg, oklch(0.5 0.1 245), oklch(0.38 0.1 250)); --scene: linear-gradient(180deg, oklch(0.82 0.05 230), oklch(0.9 0.03 220)); }
+[data-theme="blue"] body, [data-theme="blue"] .desktop { background: oklch(0.64 0.04 240); }
