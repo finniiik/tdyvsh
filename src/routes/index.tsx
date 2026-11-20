@@ -189,6 +189,7 @@ function Index() {
   useEffect(() => { try { document.documentElement.dataset["theme"] = localStorage.getItem("chibi_theme") || ""; } catch {} }, []);
   useEffect(() => { try { setUnzipped(localStorage.getItem("chibi_unzip") === "1"); } catch {} }, []);
   const unzip = () => { setUnzipped(true); setZipMenu(null); try { localStorage.setItem("chibi_unzip", "1"); } catch {} };
+  const rezip = () => { setUnzipped(false); setMenu(null); setSecretRoot(null); try { localStorage.setItem("chibi_unzip", "0"); } catch {} };
   const zipAt = (x: number, y: number) => setZipMenu({ x: Math.min(x, window.innerWidth - 180), y: Math.min(y, window.innerHeight - 60) });
   const deskIcons = [...WINS, ...(unzipped ? [] : [{ id: "zip", title: "квест.zip" }]), ...(!unzipped ? [] : SECRET_ROOTS.filter(node => !deletedFolders.includes(node.id)).map(node => ({ id: node.id, title: node.name })))];
   const [pos, setPos] = useState<Record<string, { c: number; r: number }>>({});
@@ -469,6 +470,7 @@ function Index() {
       </div>
 
       {secretRoot && <SecretExplorer key={secretRoot.id} root={secretRoot} onClose={() => setSecretRoot(null)} onDelete={() => removeFolder(secretRoot.id)} />}
+      {unzipped && <button className="xpbtn fixed bottom-3 right-3 z-[55] px-3 py-1 text-primary-foreground shadow-lg" onClick={() => { if (window.confirm("завершить поиск и собрать всё обратно в квест.zip?")) rezip(); }}>завершить поиск</button>}
       {zipMenu && <div className="ctxmenu fixed z-[60] w-44" style={{ left: zipMenu.x, top: zipMenu.y }} onClick={e => e.stopPropagation()}><button className="ctxitem" onClick={() => { if (window.confirm("распаковать квест.zip?")) unzip(); else setZipMenu(null); }}>распаковать</button></div>}
       {folderMenu && <div className="ctxmenu fixed z-[60] w-44" style={{ left: folderMenu.x, top: folderMenu.y }} onClick={e => e.stopPropagation()}><Button variant="osFile" className="ctxitem" onClick={() => removeFolder(folderMenu.id)}>удалить папку</Button></div>}
 
@@ -478,6 +480,7 @@ function Index() {
           <button className="ctxitem" onClick={() => { setMenu(null); focus("wallpaper"); }}>сменить обои</button>
           <button className="ctxitem" onClick={() => { setMenu(null); const t = ["", "dark", "blue"]; const cur = document.documentElement.dataset["theme"] || ""; const n = t[(t.indexOf(cur) + 1) % t.length] || ""; document.documentElement.dataset["theme"] = n; try { localStorage.setItem("chibi_theme", n); } catch {} }}>сменить оформление</button>
           <button className="ctxitem" onClick={() => { setMenu(null); setCredits(true); }}>о системе</button>
+          {unzipped && <button className="ctxitem" onClick={() => { if (window.confirm("завершить поиск и собрать всё обратно в квест.zip?")) rezip(); }}>завершить поиск</button>}
         </div>
       )}
 
