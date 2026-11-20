@@ -186,7 +186,7 @@ function Index() {
   const removeFolder = (id: string) => { setDeletedFolders(previous => { const next = deleteSecretFolder(previous, id); try { localStorage.setItem("chibi_deleted_folders_v1", JSON.stringify(next)); } catch {} return next; }); setSecretRoot(null); setFolderMenu(null); };
   const [unzipped, setUnzipped] = useState(false);
   const [zipMenu, setZipMenu] = useState<{ x: number; y: number } | null>(null);
-  useEffect(() => { try { document.documentElement.dataset.theme = localStorage.getItem("chibi_theme") || ""; } catch {} }, []);
+  useEffect(() => { try { document.documentElement.dataset["theme"] = localStorage.getItem("chibi_theme") || ""; } catch {} }, []);
   useEffect(() => { try { setUnzipped(localStorage.getItem("chibi_unzip") === "1"); } catch {} }, []);
   const unzip = () => { setUnzipped(true); setZipMenu(null); try { localStorage.setItem("chibi_unzip", "1"); } catch {} };
   const zipAt = (x: number, y: number) => setZipMenu({ x: Math.min(x, window.innerWidth - 180), y: Math.min(y, window.innerHeight - 60) });
@@ -476,7 +476,7 @@ function Index() {
       {menu && (
         <div className="ctxmenu fixed z-[60] w-44" style={{ left: menu.x, top: menu.y }} onClick={(e) => e.stopPropagation()}>
           <button className="ctxitem" onClick={() => { setMenu(null); focus("wallpaper"); }}>сменить обои</button>
-          <button className="ctxitem" onClick={() => { setMenu(null); const t = ["", "dark", "blue"]; const cur = document.documentElement.dataset.theme || ""; const n = t[(t.indexOf(cur) + 1) % t.length] || ""; document.documentElement.dataset.theme = n; try { localStorage.setItem("chibi_theme", n); } catch {} }}>сменить оформление</button>
+          <button className="ctxitem" onClick={() => { setMenu(null); const t = ["", "dark", "blue"]; const cur = document.documentElement.dataset["theme"] || ""; const n = t[(t.indexOf(cur) + 1) % t.length] || ""; document.documentElement.dataset["theme"] = n; try { localStorage.setItem("chibi_theme", n); } catch {} }}>сменить оформление</button>
           <button className="ctxitem" onClick={() => { setMenu(null); setCredits(true); }}>о системе</button>
         </div>
       )}
