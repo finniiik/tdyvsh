@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { SecretExplorer } from "@/components/secret-explorer";
 import { SECRET_ROOTS, deleteSecretFolder, scatterFolders, type SecretNode } from "@/lib/secret-folders";
 import pikachu from "@/assets/chibi_andrey_pikachu.png";
-import chudo from "@/assets/chibi_chudo_andrey.png.asset.json";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -35,7 +34,7 @@ export const SKINS: { id: string; name: string; src: string; clicks: number; cos
   { id: "2018", name: "Чиби Андрей 2018", src: y2018, clicks: 5000, cost: 10, rarity: "rare", no: "002" },
   { id: "alisa", name: "Чиби Алиса", src: alisa, clicks: 15000, cost: 25, rarity: "epic", no: "003" },
   { id: "pikachu", name: "Чиби Андрей с Пикачу", src: pikachu, clicks: 50000, cost: 75, rarity: "legendary", no: "004" },
-  { id: "chudo", name: "Чиби чудо Андрей", src: chudo.url, clicks: 0, cost: 10000, rarity: "legendary", no: "005", needOwned: 3 },
+  { id: "chudo", name: "Чиби чудо Андрей", src: "/skins/chudo.png", clicks: 0, cost: 10000, rarity: "legendary", no: "005", needOwned: 3 },
 ];
 
 function Card({ s, has }: { s: (typeof SKINS)[number]; has: boolean }) {
@@ -187,6 +186,7 @@ function Index() {
   const removeFolder = (id: string) => { setDeletedFolders(previous => { const next = deleteSecretFolder(previous, id); try { localStorage.setItem("chibi_deleted_folders_v1", JSON.stringify(next)); } catch {} return next; }); setSecretRoot(null); setFolderMenu(null); };
   const [unzipped, setUnzipped] = useState(false);
   const [zipMenu, setZipMenu] = useState<{ x: number; y: number } | null>(null);
+  useEffect(() => { try { document.documentElement.dataset.theme = localStorage.getItem("chibi_theme") || ""; } catch {} }, []);
   useEffect(() => { try { setUnzipped(localStorage.getItem("chibi_unzip") === "1"); } catch {} }, []);
   const unzip = () => { setUnzipped(true); setZipMenu(null); try { localStorage.setItem("chibi_unzip", "1"); } catch {} };
   const zipAt = (x: number, y: number) => setZipMenu({ x: Math.min(x, window.innerWidth - 180), y: Math.min(y, window.innerHeight - 60) });
@@ -469,13 +469,14 @@ function Index() {
       </div>
 
       {secretRoot && <SecretExplorer key={secretRoot.id} root={secretRoot} onClose={() => setSecretRoot(null)} onDelete={() => removeFolder(secretRoot.id)} />}
-      {zipMenu && <div className="ctxmenu fixed z-[60] w-44" style={{ left: zipMenu.x, top: zipMenu.y }} onClick={e => e.stopPropagation()}><button className="ctxitem" onClick={unzip}>распаковать</button></div>}
+      {zipMenu && <div className="ctxmenu fixed z-[60] w-44" style={{ left: zipMenu.x, top: zipMenu.y }} onClick={e => e.stopPropagation()}><button className="ctxitem" onClick={() => { if (window.confirm("распаковать квест.zip?")) unzip(); else setZipMenu(null); }}>распаковать</button></div>}
       {folderMenu && <div className="ctxmenu fixed z-[60] w-44" style={{ left: folderMenu.x, top: folderMenu.y }} onClick={e => e.stopPropagation()}><Button variant="osFile" className="ctxitem" onClick={() => removeFolder(folderMenu.id)}>удалить папку</Button></div>}
 
       {/* контекстное меню рабочего стола */}
       {menu && (
         <div className="ctxmenu fixed z-[60] w-44" style={{ left: menu.x, top: menu.y }} onClick={(e) => e.stopPropagation()}>
           <button className="ctxitem" onClick={() => { setMenu(null); focus("wallpaper"); }}>сменить обои</button>
+          <button className="ctxitem" onClick={() => { setMenu(null); const t = ["", "dark", "blue"]; const cur = document.documentElement.dataset.theme || ""; const n = t[(t.indexOf(cur) + 1) % t.length] || ""; document.documentElement.dataset.theme = n; try { localStorage.setItem("chibi_theme", n); } catch {} }}>сменить оформление</button>
           <button className="ctxitem" onClick={() => { setMenu(null); setCredits(true); }}>о системе</button>
         </div>
       )}
