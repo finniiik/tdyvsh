@@ -64,7 +64,7 @@ function acSanitize(d: { clicks: number; coins: number; owned: string[]; skin: s
   const coins = Math.max(0, Math.min(Math.floor(d.coins) || 0, earned - Math.max(0, d.spent || 0)));
   return { clicks, coins, owned, skin: owned.includes(d.skin) ? d.skin : "base", claimed, bonus: Math.max(0, d.bonus || 0), spent: Math.max(0, d.spent || 0), gifts };
 }
-const AC_MAX_CPS = 20;
+const AC_MAX_CPS = 40;
 /** Все коины считаются из прогресса: клики + задания + бонусы − потраченное. Так ничего не теряется. */
 export function calcCoins(clicks: number, claimed: string[], bonus: number, spent: number) {
   const q = Array.from(new Set(claimed)).reduce((a, id) => { const x = QUESTS.find((y) => y.id === id); return a + (x && clicks >= x.clicks ? x.reward : 0); }, 0);
@@ -279,7 +279,9 @@ function Index() {
     img.src = URL.createObjectURL(file);
   };
 
-  const click = (e: React.MouseEvent<HTMLButtonElement>) => {
+  const click = (e: React.PointerEvent<HTMLButtonElement>) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    e.preventDefault();
     if (!e.isTrusted) return;
     const t = performance.now(); clickTimes.current = [...clickTimes.current.filter((x) => t - x < 1000), t];
     if (clickTimes.current.length > AC_MAX_CPS) { setCheat("слишком быстро — похоже на автокликер"); return; }
@@ -362,7 +364,7 @@ function Index() {
             style={{ position: "absolute", left: d ? drag.x : p.c * CELL_W, top: d ? drag.y : p.r * CELL_H, touchAction: "none", zIndex: d ? 5 : 1 }}
             className={`${d ? "icon-drag " : ""}desktop-file`}>
             {w.id === "zip" ? <ZipIco /> : <FolderIco />}
-            <span className="text-[11px] leading-tight text-center drop-shadow">{w.title}</span>
+            <span className="text-[11px] leading-tight text-center drop-shadow" style={folderText ? { color: folderText } : undefined}>{w.title}</span>
           </Button>); })}
         {drag && <div className="absolute w-20 h-[72px] rounded-md border-2 border-dashed border-primary-foreground/70 pointer-events-none" style={{ left: drag.tc * CELL_W, top: drag.tr * CELL_H }} />}
       </div>
@@ -376,7 +378,7 @@ function Index() {
             <div className="flex justify-end items-start">
               <div className="text-right leading-tight"><div className="text-2xl">{clicks}</div><div className="text-xs text-muted-foreground">кликов</div></div>
             </div>
-            <button onClick={click} className="relative mx-auto mt-2 block w-[min(18rem,70vw)] aspect-square select-none touch-manipulation">
+            <button onPointerDown={click} onContextMenu={(e) => e.preventDefault()} style={{ touchAction: "none", WebkitTouchCallout: "none" }} className="relative mx-auto mt-2 block w-[min(18rem,70vw)] aspect-square select-none">
               <img key={pop} src={cur.src} alt={cur.name} draggable={false}
                 className={`w-full h-full object-contain pop ${zap ? "zap" : ""}`} />
               {zap && <Bolt />}
@@ -526,7 +528,7 @@ function Index() {
                   </label>
                 </div>
                 <div className="rounded-md border-2 border-border p-2 flex justify-center desktop" style={folderText ? { ["--folder-text" as string]: folderText } : undefined}>
-                  <span className="desktop-file !min-h-0 items-center"><FolderIco /><span>пример</span></span>
+                  <span className="desktop-file !min-h-0 items-center"><FolderIco /><span style={folderText ? { color: folderText } : undefined}>пример</span></span>
                 </div>
               </div>
               <button onClick={() => setLook(false)} className="xpbtn px-4 py-1 text-primary-foreground self-end">ок</button>
