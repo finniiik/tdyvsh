@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { SecretExplorer } from "@/components/secret-explorer";
 import { SECRET_ROOTS, deleteSecretFolder, scatterFolders, type SecretNode } from "@/lib/secret-folders";
 import pikachu from "@/assets/chibi_andrey_pikachu.png";
+import chudo from "@/assets/chibi_chudo_andrey.png.asset.json";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -29,11 +30,12 @@ export const RARITY: Record<Rarity, { name: string; stars: number; cls: string }
   epic: { name: "эпическая", stars: 3, cls: "r-epic" },
   legendary: { name: "легендарная", stars: 4, cls: "r-legendary" },
 };
-export const SKINS: { id: string; name: string; src: string; clicks: number; cost: number; rarity: Rarity; no: string }[] = [
+export const SKINS: { id: string; name: string; src: string; clicks: number; cost: number; rarity: Rarity; no: string; needOwned?: number }[] = [
   { id: "base", name: "Чиби Андрей", src: base, clicks: 0, cost: 0, rarity: "common", no: "001" },
   { id: "2018", name: "Чиби Андрей 2018", src: y2018, clicks: 5000, cost: 10, rarity: "rare", no: "002" },
   { id: "alisa", name: "Чиби Алиса", src: alisa, clicks: 15000, cost: 25, rarity: "epic", no: "003" },
   { id: "pikachu", name: "Чиби Андрей с Пикачу", src: pikachu, clicks: 50000, cost: 75, rarity: "legendary", no: "004" },
+  { id: "chudo", name: "Чиби чудо Андрей", src: chudo.url, clicks: 0, cost: 10000, rarity: "legendary", no: "005", needOwned: 3 },
 ];
 
 function Card({ s, has }: { s: (typeof SKINS)[number]; has: boolean }) {
@@ -129,6 +131,16 @@ function FolderIco({ cls = "" }: { cls?: string }) {
   );
 }
 
+function ZipIco() {
+  return (
+    <svg viewBox="0 0 48 40" className="w-12 h-10">
+      <path d="M3 8a3 3 0 0 1 3-3h12l4 4h20a3 3 0 0 1 3 3v22a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3z" fill="var(--accent)" stroke="var(--border)" strokeWidth="2.5" strokeLinejoin="round" />
+      <path d="M24 9v26" stroke="var(--border)" strokeWidth="5" strokeDasharray="3 3" />
+      <rect x="20" y="20" width="8" height="8" rx="1" fill="var(--card)" stroke="var(--border)" strokeWidth="2" />
+    </svg>
+  );
+}
+
 function TitleBar({ title, right, onClose }: { title: string; right?: React.ReactNode; onClose?: () => void }) {
   return (
     <div className="titlebar text-primary-foreground pl-3 pr-1 py-1.5 flex items-center justify-between gap-2 border-b-[2.5px] border-border leading-[1.2]">
@@ -153,6 +165,7 @@ function Index() {
   const [loaded, setLoaded] = useState(false);
   const [boot, setBoot] = useState(true);
   const [stack, setStack] = useState<WinId[]>(["clicker"]);
+  const [off, setOff] = useState<Partial<Record<WinId, { x: number; y: number }>>>({});
   const [folder, setFolder] = useState<Rarity | null>(null);
   const [credits, setCredits] = useState(false);
   const [claimed, setClaimed] = useState<string[]>([]);
@@ -172,21 +185,26 @@ function Index() {
   const [folderMenu, setFolderMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   useEffect(() => { try { const saved = JSON.parse(localStorage.getItem("chibi_deleted_folders_v1") || "[]"); if (Array.isArray(saved)) setDeletedFolders(saved.filter((id): id is string => typeof id === "string")); } catch {} }, []);
   const removeFolder = (id: string) => { setDeletedFolders(previous => { const next = deleteSecretFolder(previous, id); try { localStorage.setItem("chibi_deleted_folders_v1", JSON.stringify(next)); } catch {} return next; }); setSecretRoot(null); setFolderMenu(null); };
-  const deskIcons = [...WINS, ...SECRET_ROOTS.filter(node => !deletedFolders.includes(node.id)).map(node => ({ id: node.id, title: node.name }))];
+  const [unzipped, setUnzipped] = useState(false);
+  const [zipMenu, setZipMenu] = useState<{ x: number; y: number } | null>(null);
+  useEffect(() => { try { setUnzipped(localStorage.getItem("chibi_unzip") === "1"); } catch {} }, []);
+  const unzip = () => { setUnzipped(true); setZipMenu(null); try { localStorage.setItem("chibi_unzip", "1"); } catch {} };
+  const zipAt = (x: number, y: number) => setZipMenu({ x: Math.min(x, window.innerWidth - 180), y: Math.min(y, window.innerHeight - 60) });
+  const deskIcons = [...WINS, ...(unzipped ? [] : [{ id: "zip", title: "квест.zip" }]), ...(!unzipped ? [] : SECRET_ROOTS.filter(node => !deletedFolders.includes(node.id)).map(node => ({ id: node.id, title: node.name })))];
   const [pos, setPos] = useState<Record<string, { c: number; r: number }>>({});
   const [drag, setDrag] = useState<{ id: string; x: number; y: number; tc: number; tr: number } | null>(null);
   useEffect(() => {
     const fit = () => setCols(Math.max(3, Math.floor((deskRef.current?.clientWidth ?? 360) / CELL_W)));
     fit(); window.addEventListener("resize", fit); return () => window.removeEventListener("resize", fit);
   }, [boot]);
-  useEffect(() => { let saved: Record<string, { c: number; r: number }> = {}; try { saved = JSON.parse(localStorage.getItem("chibi_pos") || "{}") || {}; } catch {} const game = layoutIcons(WINS.map((w) => w.id), saved, cols); const next = scatterFolders(SECRET_ROOTS.filter(node => !deletedFolders.includes(node.id)).map(node => node.id), saved, cols, game); setPos(next); try { localStorage.setItem("chibi_pos", JSON.stringify(next)); } catch {} }, [cols, deletedFolders]);
+  useEffect(() => { let saved: Record<string, { c: number; r: number }> = {}; try { saved = JSON.parse(localStorage.getItem("chibi_pos") || "{}") || {}; } catch {} const game = layoutIcons([...WINS.map((w) => w.id), ...(unzipped ? [] : ["zip"])], saved, cols); const next = scatterFolders((unzipped ? SECRET_ROOTS : []).filter(node => !deletedFolders.includes(node.id)).map(node => node.id), saved, cols, game); setPos(next); try { localStorage.setItem("chibi_pos", JSON.stringify(next)); } catch {} }, [cols, deletedFolders, unzipped]);
   const startDrag = (e: React.PointerEvent<HTMLButtonElement>, id: string) => {
     if (e.button > 0) return;
     if (!deskRef.current) return;
     const box = deskRef.current.getBoundingClientRect(), el = e.currentTarget.getBoundingClientRect();
     const ox = e.clientX - el.left, oy = e.clientY - el.top, sx = e.clientX, sy = e.clientY;
     const touch = e.pointerType !== "mouse"; let armed = !touch, active = false; movedRef.current = false;
-    const hold = touch ? window.setTimeout(() => { armed = true; navigator.vibrate?.(15); }, 250) : 0;
+    const hold = touch ? window.setTimeout(() => { armed = true; navigator.vibrate?.(15); if (id === "zip") { movedRef.current = true; zipAt(sx, sy); } }, id === "zip" ? 500 : 250) : 0;
     const move = (ev: PointerEvent) => {
       if (!armed) { if (Math.hypot(ev.clientX - sx, ev.clientY - sy) > 8) { clearTimeout(hold); cleanup(); } return; }
       if (!active && Math.hypot(ev.clientX - sx, ev.clientY - sy) < 5) return;
@@ -263,7 +281,7 @@ function Index() {
     setTimeout(() => setFloats((f) => f.filter((x) => x.id !== id)), 900);
   };
   const unlock = (s: (typeof SKINS)[number]) => {
-    if (clicks < s.clicks || coins < s.cost) return;
+    if (clicks < s.clicks || coins < s.cost || owned.length < (s.needOwned ?? 0)) return;
     setCoins((c) => c - s.cost); setSpent((x) => x + s.cost);
     setOwned((o) => [...o, s.id]);
     setSkin(s.id);
@@ -273,10 +291,27 @@ function Index() {
   const cur = SKINS.find((s) => s.id === skin) ?? SKINS[0];
   if (!cur) return null;
   const prog = (clicks % COIN_EVERY) / COIN_EVERY;
+  const focusWin = (id: WinId) => setStack((s) => (s[s.length - 1] === id ? s : [...s.filter((x) => x !== id), id]));
   const focus = (id: WinId) => setStack((s) => [...s.filter((x) => x !== id), id]);
+  const winDown = (e: React.PointerEvent, id: WinId) => {
+    focusWin(id);
+    const t = e.target as HTMLElement;
+    if (!t.closest(".titlebar") || t.closest("button")) return;
+    e.preventDefault();
+    const el = e.currentTarget as HTMLElement, sx = e.clientX, sy = e.clientY, o = off[id] ?? { x: 0, y: 0 };
+    let raf = 0, nx = o.x, ny = o.y;
+    const r = el.getBoundingClientRect();
+    const move = (ev: PointerEvent) => {
+      nx = o.x + Math.max(80 - r.right, Math.min(ev.clientX - sx, window.innerWidth - r.left - 80));
+      ny = o.y + Math.max(44 - r.top, Math.min(ev.clientY - sy, window.innerHeight - r.top - 40));
+      if (!raf) raf = requestAnimationFrame(() => { raf = 0; el.style.translate = `${nx}px ${ny}px`; });
+    };
+    const up = () => { cancelAnimationFrame(raf); window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up); setOff((p) => ({ ...p, [id]: { x: nx, y: ny } })); };
+    window.addEventListener("pointermove", move); window.addEventListener("pointerup", up); window.addEventListener("pointercancel", up);
+  };
   const close = (id: WinId) => setStack((s) => s.filter((x) => x !== id));
   const top = stack[stack.length - 1];
-  const winStyle = (id: WinId) => ({ zIndex: 10 + stack.indexOf(id), display: stack.includes(id) ? undefined : "none" });
+  const winStyle = (id: WinId) => ({ zIndex: 10 + stack.indexOf(id), display: stack.includes(id) ? undefined : "none", translate: off[id] ? `${off[id].x}px ${off[id].y}px` : undefined });
   const winCls = (id: WinId) => `oswin pill overflow-hidden winopen ${top === id ? "" : "oswin-back"}`;
 
   if (boot) return (
@@ -293,7 +328,7 @@ function Index() {
   return (
     <main className="min-h-screen p-4 pt-11 desktop"
       style={wall ? { backgroundImage: `url(${wall})`, backgroundSize: "cover", backgroundPosition: "center", backgroundAttachment: "fixed" } : undefined}
-      onClick={() => { setMenu(null); setFolderMenu(null); }}
+      onClick={() => { setMenu(null); setFolderMenu(null); setZipMenu(null); }}
       onContextMenu={(e) => { if (!isDesktopBg(e)) return; e.preventDefault(); openMenu(e.clientX, e.clientY); }}
       onPointerDown={(e) => { if (e.pointerType === "mouse" || !isDesktopBg(e)) return; const { clientX, clientY } = e; pressRef.current = window.setTimeout(() => openMenu(clientX, clientY), 550); }}
       onPointerUp={() => { if (pressRef.current) { clearTimeout(pressRef.current); pressRef.current = null; } }}
@@ -311,19 +346,19 @@ function Index() {
       {/* значки на рабочем столе — свободное размещение по сетке, как в Windows */}
       <div ref={deskRef} className="relative mb-4" style={{ height: deskH }}>
         {deskIcons.map((w) => { const p = pos[w.id] ?? { c: 0, r: 0 }; const d = drag?.id === w.id; return (
-          <Button variant="osFile" key={w.id} data-folder-id={w.id} onClick={() => { if (movedRef.current) return; const secret = SECRET_ROOTS.find(node => node.id === w.id); if (secret) setSecretRoot(secret); else { const win = WINS.find(win => win.id === w.id); if (win) focus(win.id); } }}
+          <Button variant="osFile" key={w.id} data-folder-id={w.id} onClick={(e) => { if (movedRef.current) return; if (w.id === "zip") { e.stopPropagation(); zipAt(e.clientX, e.clientY); return; } const secret = SECRET_ROOTS.find(node => node.id === w.id); if (secret) setSecretRoot(secret); else { const win = WINS.find(win => win.id === w.id); if (win) focus(win.id); } }}
             onPointerDown={(e) => startDrag(e, w.id)}
-            onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); if (SECRET_ROOTS.some(node => node.id === w.id)) setFolderMenu({ id: w.id, x: Math.min(e.clientX, window.innerWidth - 180), y: Math.min(e.clientY, window.innerHeight - 80) }); }}
+            onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); if (w.id === "zip") zipAt(e.clientX, e.clientY); else if (SECRET_ROOTS.some(node => node.id === w.id)) setFolderMenu({ id: w.id, x: Math.min(e.clientX, window.innerWidth - 180), y: Math.min(e.clientY, window.innerHeight - 80) }); }}
             style={{ position: "absolute", left: d ? drag.x : p.c * CELL_W, top: d ? drag.y : p.r * CELL_H, touchAction: "none", zIndex: d ? 5 : 1 }}
             className={`${d ? "icon-drag " : ""}desktop-file`}>
-            <FolderIco />
+            {w.id === "zip" ? <ZipIco /> : <FolderIco />}
             <span className="text-[11px] leading-tight text-center drop-shadow">{w.title}</span>
           </Button>); })}
         {drag && <div className="absolute w-20 h-[72px] rounded-md border-2 border-dashed border-primary-foreground/70 pointer-events-none" style={{ left: drag.tc * CELL_W, top: drag.tr * CELL_H }} />}
       </div>
 
       <div>
-        <section className={winCls("clicker")} style={winStyle("clicker")} onPointerDown={() => focus("clicker")}>
+        <section className={winCls("clicker")} style={winStyle("clicker")} onPointerDown={(e) => winDown(e, "clicker")}>
           <TitleBar title="пирочибиклик.exe" onClose={() => close("clicker")}
             right={<button onClick={() => setCredits(true)} aria-label="инфо" className="text-lg leading-none px-1">•••</button>} />
           <div className="polaroid">
@@ -349,7 +384,7 @@ function Index() {
           </div>
         </section>
 
-        <section className={winCls("collection")} style={winStyle("collection")} onPointerDown={() => focus("collection")}>
+        <section className={winCls("collection")} style={winStyle("collection")} onPointerDown={(e) => winDown(e, "collection")}>
           <TitleBar title={folder ? `коллекция / ${RARITY[folder].name}` : "коллекция.exe"} onClose={() => close("collection")}
             right={<span className="text-xs">{owned.length}/{SKINS.length}</span>} />
           <div className="p-3 flex flex-col gap-3 max-h-[70vh] overflow-auto">
@@ -375,13 +410,13 @@ function Index() {
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {list.map((s) => {
               const has = owned.includes(s.id);
-              const can = clicks >= s.clicks && coins >= s.cost;
+              const can = clicks >= s.clicks && coins >= s.cost && owned.length >= (s.needOwned ?? 0);
               return (
                 <button key={s.id} onClick={() => (has ? setSkin(s.id) : unlock(s))}
                   className={`text-left ${skin === s.id ? "card-on" : ""} ${!has && !can ? "opacity-80" : ""}`}>
                   <Card s={s} has={has} />
                   <div className="text-xs text-muted-foreground flex flex-wrap items-center justify-center gap-1 mt-1">
-                    {has ? (skin === s.id ? "надет" : "надеть") : <>{s.clicks} кликов + {s.cost} <Coin small /></>}
+                    {has ? (skin === s.id ? "надет" : "надеть") : <>{s.needOwned ? `${s.needOwned} скина + ` : `${s.clicks} кликов + `}{s.cost} <Coin small /></>}
                   </div>
                 </button>
               );
@@ -393,12 +428,12 @@ function Index() {
           </div>
         </section>
 
-        <Wheel cls={winCls("fortune")} style={winStyle("fortune")} onFocus={() => focus("fortune")} onWin={(n, epic) => { if (epic) { setGifts((g) => [...g, "alisa"]); setOwned((o) => (o.includes("alisa") ? o : [...o, "alisa"])); if (owned.includes("alisa")) { setBonus((b) => b + 25); setCoins((c) => c + 25); } } else { setBonus((b) => b + Math.min(3, n)); setCoins((c) => c + Math.min(3, n)); } }} onClose={() => close("fortune")} />
+        <Wheel onSkin={(id) => { setGifts((g) => [...g, id]); if (owned.includes(id)) { setBonus((b) => b + 25); setCoins((c) => c + 25); } else setOwned((o) => [...o, id]); }} cls={winCls("fortune")} style={winStyle("fortune")} onFocus={(e: React.PointerEvent) => winDown(e, "fortune")} onWin={(n, epic) => { if (epic) { setGifts((g) => [...g, "alisa"]); setOwned((o) => (o.includes("alisa") ? o : [...o, "alisa"])); if (owned.includes("alisa")) { setBonus((b) => b + 25); setCoins((c) => c + 25); } } else { setBonus((b) => b + Math.min(3, n)); setCoins((c) => c + Math.min(3, n)); } }} onClose={() => close("fortune")} />
 
-        <ScratchPolaroid cls={winCls("scratch")} style={winStyle("scratch")} onFocus={() => focus("scratch")} onClose={() => close("scratch")}
+        <ScratchPolaroid cls={winCls("scratch")} style={winStyle("scratch")} onFocus={(e: React.PointerEvent) => winDown(e, "scratch")} onClose={() => close("scratch")}
           owned={owned} onWin={(id: string | null) => { const r = scratchReward(id, owned); if (r.coins) { setBonus((b) => b + r.coins); setCoins((c) => c + r.coins); } else if (id) { setGifts((g) => [...g, id]); setOwned((o) => (o.includes(id) ? o : [...o, id])); } }} />
 
-        <section className={winCls("quests")} style={winStyle("quests")} onPointerDown={() => focus("quests")}>
+        <section className={winCls("quests")} style={winStyle("quests")} onPointerDown={(e) => winDown(e, "quests")}>
           <TitleBar title="задания.exe" onClose={() => close("quests")} right={<span className="text-xs">{claimed.length}/{QUESTS.length}</span>} />
           <div className="p-3 flex flex-col gap-2 max-h-[70vh] overflow-auto">
             {QUESTS.map((q) => {
@@ -419,7 +454,7 @@ function Index() {
           </div>
         </section>
 
-        <section className={winCls("wallpaper")} style={winStyle("wallpaper")} onPointerDown={() => focus("wallpaper")}>
+        <section className={winCls("wallpaper")} style={winStyle("wallpaper")} onPointerDown={(e) => winDown(e, "wallpaper")}>
           <TitleBar title="обои.exe" onClose={() => close("wallpaper")} />
           <div className="p-4 flex flex-col gap-3 items-center">
             <div className="w-full aspect-video rounded-md border-2 border-border desktop" style={wall ? { backgroundImage: `url(${wall})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined} />
@@ -434,6 +469,7 @@ function Index() {
       </div>
 
       {secretRoot && <SecretExplorer key={secretRoot.id} root={secretRoot} onClose={() => setSecretRoot(null)} onDelete={() => removeFolder(secretRoot.id)} />}
+      {zipMenu && <div className="ctxmenu fixed z-[60] w-44" style={{ left: zipMenu.x, top: zipMenu.y }} onClick={e => e.stopPropagation()}><button className="ctxitem" onClick={unzip}>распаковать</button></div>}
       {folderMenu && <div className="ctxmenu fixed z-[60] w-44" style={{ left: folderMenu.x, top: folderMenu.y }} onClick={e => e.stopPropagation()}><Button variant="osFile" className="ctxitem" onClick={() => removeFolder(folderMenu.id)}>удалить папку</Button></div>}
 
       {/* контекстное меню рабочего стола */}
@@ -478,35 +514,39 @@ const QUESTS = [
   { id: "q50k", clicks: 50000, reward: 20 },
 ];
 const EPIC_CHANCE = 0.0001;
+export const ANY_SKIN_CHANCE = 0.000000001; // 0,0000001%
 const PRIZES: number[] = [1, 2, 3, 1, 2, 1];
 const COOLDOWN = 60 * 60 * 1000;
-function Wheel({ onWin, onClose, cls, style, onFocus }: { onWin: (n: number, epic?: boolean) => void; onClose: () => void; cls: string; style: React.CSSProperties; onFocus: () => void }) {
+function Wheel({ onSkin, onWin, onClose, cls, style, onFocus }: { onSkin: (id: string) => void; onWin: (n: number, epic?: boolean) => void; onClose: () => void; cls: string; style: React.CSSProperties; onFocus: (e: React.PointerEvent) => void }) {
   const [rot, setRot] = useState(0);
   const [spinning, setSpinning] = useState(false);
   const [last, setLast] = useState(0);
   const [now, setNow] = useState(0);
   const [won, setWon] = useState<number | null>(null);
   const [epicWon, setEpicWon] = useState(false);
+  const [skinWon, setSkinWon] = useState("");
   useEffect(() => { setLast(Number(localStorage.getItem("chibi_wheel") || 0)); setNow(Date.now()); const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
   const left = Math.max(0, last + COOLDOWN - now);
   const spin = () => {
     if (spinning || left > 0) return;
-    const epic = Math.random() < EPIC_CHANCE;
+    const any = Math.random() < ANY_SKIN_CHANCE ? SKINS[Math.floor(Math.random() * SKINS.length)] : undefined;
+    const epic = !any && Math.random() < EPIC_CHANCE;
     const i = Math.floor(Math.random() * PRIZES.length);
     const seg = 360 / PRIZES.length;
-    setWon(null); setEpicWon(false); setSpinning(true);
-    setRot((r) => r - (r % 360) + 360 * 5 + (epic ? 0 : 360 - i * seg - seg / 2));
-    setTimeout(() => { setSpinning(false); const w = PRIZES[i] ?? 1; if (epic) { setEpicWon(true); onWin(0, true); } else { setWon(w); onWin(w); } const t = Date.now(); setLast(t); localStorage.setItem("chibi_wheel", String(t)); }, 4000);
+    setWon(null); setEpicWon(false); setSkinWon(""); setSpinning(true);
+    setRot((r) => r - (r % 360) + 360 * 5 + (epic ? 0 : any ? 357 : 360 - i * seg - seg / 2));
+    setTimeout(() => { setSpinning(false); const w = PRIZES[i] ?? 1; if (any) { setSkinWon(any.name); onSkin(any.id); } else if (epic) { setEpicWon(true); onWin(0, true); } else { setWon(w); onWin(w); } const t = Date.now(); setLast(t); localStorage.setItem("chibi_wheel", String(t)); }, 4000);
   };
   const mm = Math.floor(left / 60000), ss = Math.floor((left % 60000) / 1000);
   return (
     <section className={cls} style={style} onPointerDown={onFocus}>
       <TitleBar title="фортуна.exe" onClose={onClose}  />
-      <div className="scene !border-0 !rounded-none !shadow-none p-4 flex flex-col items-center gap-3">
+      <div className="wheel-scene scene !border-0 !rounded-none !shadow-none p-4 flex flex-col items-center gap-3">
         <div className="relative w-[min(16rem,70vw)] aspect-square">
           <div className="wheel-pin" />
-          <div className="wheel" style={{ transform: `rotate(${rot}deg)`, transition: spinning ? "transform 4s cubic-bezier(.15,.9,.25,1)" : "none" }}>
+          <div className="wheel" style={{ willChange: "transform", transform: `rotate(${rot}deg)`, transition: spinning ? "transform 4s cubic-bezier(.15,.9,.25,1)" : "none" }}>
             <span className="absolute left-1/2 top-0 h-1/2 w-[2px] -translate-x-1/2 bg-[var(--r-epic,oklch(0.55_0.2_300))]" />
+            <span className="absolute left-1/2 top-0 h-1/2 w-px origin-bottom bg-[var(--r-legendary,oklch(0.8_0.15_85))]" style={{ transform: "translateX(-50%) rotate(3deg)" }} />
             {PRIZES.map((p, i) => (
               <span key={i} className="absolute inset-0 flex justify-center pt-[8%] text-2xl" style={{ transform: `rotate(${i * 60 + 30}deg)` }}>
                 <span className="flex items-center gap-0.5">{p}<Coin small /></span>
@@ -515,7 +555,11 @@ function Wheel({ onWin, onClose, cls, style, onFocus }: { onWin: (n: number, epi
           </div>
           <div className="absolute inset-0 m-auto w-12 h-12 rounded-full bg-card border-[2.5px] border-border" />
         </div>
-        <div className="h-5 text-sm">{epicWon ? "эпический скин: Чиби Алиса" : won ? <>выпало +{won} <Coin small /></> : null}</div>
+        <div className="h-5 text-sm">{skinWon ? `скин: ${skinWon}` : epicWon ? "эпический скин: Чиби Алиса" : won ? <>выпало +{won} <Coin small /></> : null}</div>
+        <div className="w-full text-[11px] leading-tight grid grid-cols-2 gap-x-3 gap-y-0.5 text-muted-foreground">
+          <span>1 коин — 50%</span><span>2 коина — 33%</span><span>3 коина — 17%</span>
+          <span>Чиби Алиса — 0,01%</span><span className="col-span-2">любой скин — 0,0000001%</span>
+        </div>
         <button onClick={spin} disabled={spinning || left > 0} className="xpbtn px-6 py-1.5 text-primary-foreground disabled:opacity-60">
           {spinning ? "крутится..." : left > 0 ? `ждать ${mm}:${String(ss).padStart(2, "0")}` : "крутить"}
         </button>
@@ -539,7 +583,7 @@ export function scratchReward(id: string | null, owned: string[]) {
 }
 export const scratchLeft = (last: number, now: number) => Math.max(0, last + SCRATCH_COOLDOWN - now);
 
-function ScratchPolaroid({ cls, style, onFocus, onClose, owned, onWin }: { cls: string; style: React.CSSProperties; onFocus: () => void; onClose: () => void; owned: string[]; onWin: (id: string | null) => void }) {
+function ScratchPolaroid({ cls, style, onFocus, onClose, owned, onWin }: { cls: string; style: React.CSSProperties; onFocus: (e: React.PointerEvent) => void; onClose: () => void; owned: string[]; onWin: (id: string | null) => void }) {
   const cv = useRef<HTMLCanvasElement>(null);
   const [last, setLast] = useState(0);
   const [now, setNow] = useState(0);

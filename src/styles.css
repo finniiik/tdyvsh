@@ -285,3 +285,6 @@ html, body { overscroll-behavior: none; }
 .secret-error { min-height: 20px; color: var(--destructive); }
 .secret-actions { display: flex; justify-content: flex-end; gap: 8px; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; } }
+
+.wheel-scene { contain: paint; overflow: hidden; }
+.oswin .titlebar { cursor: grab; touch-action: none; user-select: none; }
