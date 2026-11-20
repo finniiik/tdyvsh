@@ -57,7 +57,7 @@ const acSign = (d: object) => acHash(AC_SALT + JSON.stringify(d) + AC_SALT.lengt
 /** Сколько коинов игрок мог честно заработать минус потраченное. */
 function acSanitize(d: { clicks: number; coins: number; owned: string[]; skin: string; claimed: string[]; bonus: number; spent: number; gifts: string[] }) {
   const clicks = Math.max(0, Math.floor(d.clicks) || 0);
-  const claimed = d.claimed.filter((id) => { const q = QUESTS.find((x) => x.id === id); return q && clicks >= q.clicks; });
+  const claimed = Array.from(new Set(d.claimed)).filter((id) => { const q = QUESTS.find((x) => x.id === id); return q && clicks >= q.clicks; });
   const gifts = d.gifts.filter((id) => SKINS.some((x) => x.id === id));
   const owned = Array.from(new Set(["base", ...d.owned.filter((id) => { const sk = SKINS.find((x) => x.id === id); return sk && (clicks >= sk.clicks || gifts.includes(id)); })]));
   const earned = Math.floor(clicks / COIN_EVERY) + claimed.reduce((a, id) => a + (QUESTS.find((x) => x.id === id)?.reward ?? 0), 0) + Math.max(0, d.bonus || 0);
@@ -65,6 +65,11 @@ function acSanitize(d: { clicks: number; coins: number; owned: string[]; skin: s
   return { clicks, coins, owned, skin: owned.includes(d.skin) ? d.skin : "base", claimed, bonus: Math.max(0, d.bonus || 0), spent: Math.max(0, d.spent || 0), gifts };
 }
 const AC_MAX_CPS = 20;
+/** Все коины считаются из прогресса: клики + задания + бонусы − потраченное. Так ничего не теряется. */
+export function calcCoins(clicks: number, claimed: string[], bonus: number, spent: number) {
+  const q = Array.from(new Set(claimed)).reduce((a, id) => { const x = QUESTS.find((y) => y.id === id); return a + (x && clicks >= x.clicks ? x.reward : 0); }, 0);
+  return Math.max(0, Math.floor(Math.max(0, clicks) / COIN_EVERY) + q + Math.max(0, bonus || 0) - Math.max(0, spent || 0));
+}
 
 function Bolt() {
   return (
@@ -155,7 +160,6 @@ function TitleBar({ title, right, onClose }: { title: string; right?: React.Reac
 
 function Index() {
   const [clicks, setClicks] = useState(0);
-  const [coins, setCoins] = useState(0);
   const [owned, setOwned] = useState<string[]>(["base"]);
   const [skin, setSkin] = useState("base");
   const [pop, setPop] = useState(0);
@@ -171,6 +175,7 @@ function Index() {
   const [bonus, setBonus] = useState(0);
   const [spent, setSpent] = useState(0);
   const [gifts, setGifts] = useState<string[]>([]);
+  const coins = calcCoins(clicks, claimed, bonus, spent);
   const clickTimes = useRef<number[]>([]);
   const [cheat, setCheat] = useState("");
   const [wall, setWall] = useState("");
@@ -184,6 +189,12 @@ function Index() {
   const [folderMenu, setFolderMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   useEffect(() => { try { const saved = JSON.parse(localStorage.getItem("chibi_deleted_folders_v1") || "[]"); if (Array.isArray(saved)) setDeletedFolders(saved.filter((id): id is string => typeof id === "string")); } catch {} }, []);
   const removeFolder = (id: string) => { setDeletedFolders(previous => { const next = deleteSecretFolder(previous, id); try { localStorage.setItem("chibi_deleted_folders_v1", JSON.stringify(next)); } catch {} return next; }); setSecretRoot(null); setFolderMenu(null); };
+  const [look, setLook] = useState(false);
+  const [theme, setTheme] = useState("");
+  const [folderText, setFolderText] = useState("");
+  useEffect(() => { try { setTheme(localStorage.getItem("chibi_theme") || ""); setFolderText(localStorage.getItem("chibi_folder_text") || ""); } catch {} }, []);
+  const pickTheme = (n: string) => { setTheme(n); document.documentElement.dataset["theme"] = n; try { localStorage.setItem("chibi_theme", n); } catch {} };
+  const pickFolderText = (c: string) => { setFolderText(c); try { localStorage.setItem("chibi_folder_text", c); } catch {} };
   const [unzipped, setUnzipped] = useState(false);
   const [zipMenu, setZipMenu] = useState<{ x: number; y: number } | null>(null);
   useEffect(() => { try { document.documentElement.dataset["theme"] = localStorage.getItem("chibi_theme") || ""; } catch {} }, []);
@@ -232,8 +243,8 @@ function Index() {
     if (!d && (raw || bak)) { setCheat("сохранение было изменено вручную — прогресс сброшен"); }
     if (d) {
       const c = acSanitize({ clicks: d.clicks, coins: d.coins, owned: Array.isArray(d.owned) ? d.owned : [], skin: String(d.skin), claimed: Array.isArray(d.claimed) ? d.claimed : [], bonus: d.bonus, spent: d.spent, gifts: Array.isArray(d.gifts) ? d.gifts : [] });
-      if (c.coins !== d.coins || c.owned.length !== (d.owned?.length ?? 0)) setCheat("найдены нечестные коины или скины — они убраны");
-      setClicks(c.clicks); setCoins(c.coins); setOwned(c.owned); setSkin(c.skin); setClaimed(c.claimed); setBonus(c.bonus); setSpent(c.spent); setGifts(c.gifts);
+      if (c.owned.length !== (d.owned?.length ?? 0)) setCheat("найдены нечестные коины или скины — они убраны");
+      setClicks(c.clicks); setOwned(c.owned); setSkin(c.skin); setClaimed(c.claimed); setBonus(c.bonus); setSpent(c.spent); setGifts(c.gifts);
     }
     try { setWall(localStorage.getItem("chibi_wall") || ""); } catch {}
     setLoaded(true);
@@ -273,9 +284,7 @@ function Index() {
     const t = performance.now(); clickTimes.current = [...clickTimes.current.filter((x) => t - x < 1000), t];
     if (clickTimes.current.length > AC_MAX_CPS) { setCheat("слишком быстро — похоже на автокликер"); return; }
     const r = e.currentTarget.getBoundingClientRect();
-    const n = clicks + 1;
-    setClicks(n);
-    if (n % COIN_EVERY === 0) setCoins((c) => c + 1);
+    setClicks((c) => c + 1);
     setPop((p) => p + 1);
     const id = Date.now() + Math.random();
     setFloats((f) => [...f.slice(-10), { id, x: e.clientX - r.left, y: e.clientY - r.top }]);
@@ -283,7 +292,7 @@ function Index() {
   };
   const unlock = (s: (typeof SKINS)[number]) => {
     if (clicks < s.clicks || coins < s.cost || owned.length < (s.needOwned ?? 0)) return;
-    setCoins((c) => c - s.cost); setSpent((x) => x + s.cost);
+    setSpent((x) => x + s.cost);
     setOwned((o) => [...o, s.id]);
     setSkin(s.id);
     setZap(true);
@@ -328,7 +337,7 @@ function Index() {
 
   return (
     <main className="min-h-screen p-4 pt-11 desktop"
-      style={wall ? { backgroundImage: `url(${wall})`, backgroundSize: "cover", backgroundPosition: "center", backgroundAttachment: "fixed" } : undefined}
+      style={{ ...(wall ? { backgroundImage: `url(${wall})`, backgroundSize: "cover", backgroundPosition: "center", backgroundAttachment: "fixed" } : {}), ...(folderText ? { ["--folder-text" as string]: folderText } : {}) }}
       onClick={() => { setMenu(null); setFolderMenu(null); setZipMenu(null); }}
       onContextMenu={(e) => { if (!isDesktopBg(e)) return; e.preventDefault(); openMenu(e.clientX, e.clientY); }}
       onPointerDown={(e) => { if (e.pointerType === "mouse" || !isDesktopBg(e)) return; const { clientX, clientY } = e; pressRef.current = window.setTimeout(() => openMenu(clientX, clientY), 550); }}
@@ -429,10 +438,10 @@ function Index() {
           </div>
         </section>
 
-        <Wheel onSkin={(id) => { setGifts((g) => [...g, id]); if (owned.includes(id)) { setBonus((b) => b + 25); setCoins((c) => c + 25); } else setOwned((o) => [...o, id]); }} cls={winCls("fortune")} style={winStyle("fortune")} onFocus={(e: React.PointerEvent) => winDown(e, "fortune")} onWin={(n, epic) => { if (epic) { setGifts((g) => [...g, "alisa"]); setOwned((o) => (o.includes("alisa") ? o : [...o, "alisa"])); if (owned.includes("alisa")) { setBonus((b) => b + 25); setCoins((c) => c + 25); } } else { setBonus((b) => b + Math.min(3, n)); setCoins((c) => c + Math.min(3, n)); } }} onClose={() => close("fortune")} />
+        <Wheel onSkin={(id) => { setGifts((g) => [...g, id]); if (owned.includes(id)) { setBonus((b) => b + 25); } else setOwned((o) => [...o, id]); }} cls={winCls("fortune")} style={winStyle("fortune")} onFocus={(e: React.PointerEvent) => winDown(e, "fortune")} onWin={(n, epic) => { if (epic) { setGifts((g) => [...g, "alisa"]); setOwned((o) => (o.includes("alisa") ? o : [...o, "alisa"])); if (owned.includes("alisa")) { setBonus((b) => b + 25); } } else { setBonus((b) => b + Math.min(3, n)); } }} onClose={() => close("fortune")} />
 
         <ScratchPolaroid cls={winCls("scratch")} style={winStyle("scratch")} onFocus={(e: React.PointerEvent) => winDown(e, "scratch")} onClose={() => close("scratch")}
-          owned={owned} onWin={(id: string | null) => { const r = scratchReward(id, owned); if (r.coins) { setBonus((b) => b + r.coins); setCoins((c) => c + r.coins); } else if (id) { setGifts((g) => [...g, id]); setOwned((o) => (o.includes(id) ? o : [...o, id])); } }} />
+          owned={owned} onWin={(id: string | null) => { const r = scratchReward(id, owned); if (r.coins) { setBonus((b) => b + r.coins); } else if (id) { setGifts((g) => [...g, id]); setOwned((o) => (o.includes(id) ? o : [...o, id])); } }} />
 
         <section className={winCls("quests")} style={winStyle("quests")} onPointerDown={(e) => winDown(e, "quests")}>
           <TitleBar title="задания.exe" onClose={() => close("quests")} right={<span className="text-xs">{claimed.length}/{QUESTS.length}</span>} />
@@ -446,7 +455,7 @@ function Index() {
                     <div className="text-sm">кликни {q.clicks} раз</div>
                     <div className="h-2 mt-1 rounded bg-muted border border-border overflow-hidden"><div className="h-full bg-primary" style={{ width: `${Math.min(1, clicks / q.clicks) * 100}%` }} /></div>
                   </div>
-                  <button disabled={done || !ok} onClick={() => { setClaimed((c) => [...c, q.id]); setCoins((c) => c + q.reward); }}
+                  <button disabled={done || !ok} onClick={() => { setClaimed((c) => (c.includes(q.id) ? c : [...c, q.id])); }}
                     className="xpbtn px-3 py-1 text-xs text-primary-foreground disabled:opacity-50 flex items-center gap-1 shrink-0">
                     {done ? "получено" : <>+{q.reward} <Coin small /></>}
                   </button>
@@ -478,7 +487,7 @@ function Index() {
       {menu && (
         <div className="ctxmenu fixed z-[60] w-44" style={{ left: menu.x, top: menu.y }} onClick={(e) => e.stopPropagation()}>
           <button className="ctxitem" onClick={() => { setMenu(null); focus("wallpaper"); }}>сменить обои</button>
-          <button className="ctxitem" onClick={() => { setMenu(null); const t = ["", "dark", "blue"]; const cur = document.documentElement.dataset["theme"] || ""; const n = t[(t.indexOf(cur) + 1) % t.length] || ""; document.documentElement.dataset["theme"] = n; try { localStorage.setItem("chibi_theme", n); } catch {} }}>сменить оформление</button>
+          <button className="ctxitem" onClick={() => { setMenu(null); setLook(true); }}>оформление</button>
           <button className="ctxitem" onClick={() => { setMenu(null); setCredits(true); }}>о системе</button>
           {unzipped && <button className="ctxitem" onClick={() => { if (window.confirm("завершить поиск и собрать всё обратно в квест.zip?")) rezip(); }}>завершить поиск</button>}
         </div>
@@ -487,6 +496,42 @@ function Index() {
       {cheat && (
         <div className="fixed inset-x-0 bottom-4 z-[70] flex justify-center px-4" onClick={() => setCheat("")}>
           <div className="pill px-4 py-2 text-sm bg-card">античит: {cheat}</div>
+        </div>
+      )}
+
+      {/* окошко «оформление» — как «персонализация» в windows */}
+      {look && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/40" onClick={() => setLook(false)}>
+          <section className="pill overflow-hidden winopen w-full max-w-xs bg-card" onClick={(e) => e.stopPropagation()}>
+            <TitleBar title="оформление" onClose={() => setLook(false)} />
+            <div className="p-4 flex flex-col gap-4 text-sm">
+              <div className="flex flex-col gap-2">
+                <div>цвет папок и окон</div>
+                <div className="flex gap-2">
+                  {[["", "розовый"], ["dark", "тёмный"], ["blue", "голубой"]].map(([id, name]) => (
+                    <button key={id} onClick={() => pickTheme(id ?? "")} className={`xpbtn flex-1 px-2 py-1 text-xs text-primary-foreground ${theme === id ? "ring-2 ring-border" : "opacity-80"}`}>{name}</button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex flex-col gap-2">
+                <div>цвет текста папок</div>
+                <div className="flex flex-wrap gap-2 items-center">
+                  {["", "#ffffff", "#000000", "#ff5fa2", "#ffd84d", "#5fd3ff", "#7dff8a", "#b48cff"].map((c) => (
+                    <button key={c || "auto"} aria-label={c || "как в теме"} onClick={() => pickFolderText(c)}
+                      className={`w-7 h-7 rounded-md border-2 border-border text-[10px] ${folderText === c ? "ring-2 ring-primary ring-offset-1" : ""}`}
+                      style={c ? { background: c } : undefined}>{c ? "" : "авто"}</button>
+                  ))}
+                  <label className="w-7 h-7 rounded-md border-2 border-border overflow-hidden cursor-pointer relative" title="свой цвет" style={{ background: "conic-gradient(red, yellow, lime, cyan, blue, magenta, red)" }}>
+                    <input type="color" value={folderText || "#ffffff"} onChange={(e) => pickFolderText(e.target.value)} className="absolute inset-0 opacity-0 cursor-pointer" />
+                  </label>
+                </div>
+                <div className="rounded-md border-2 border-border p-2 flex justify-center desktop" style={folderText ? { ["--folder-text" as string]: folderText } : undefined}>
+                  <span className="desktop-file !min-h-0 items-center"><FolderIco /><span>пример</span></span>
+                </div>
+              </div>
+              <button onClick={() => setLook(false)} className="xpbtn px-4 py-1 text-primary-foreground self-end">ок</button>
+            </div>
+          </section>
         </div>
       )}
 
