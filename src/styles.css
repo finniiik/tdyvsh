@@ -293,3 +293,29 @@ html, body { overscroll-behavior: none; }
 [data-theme="dark"] body, [data-theme="dark"] .desktop { background: oklch(0.2 0.025 350); }
 [data-theme="blue"] { --background: oklch(0.9 0.04 240); --card: oklch(0.97 0.015 240); --primary: oklch(0.62 0.13 240); --accent: oklch(0.86 0.06 240); --border: oklch(0.36 0.08 250); --link: oklch(0.42 0.12 250); --chrome: linear-gradient(180deg, oklch(0.5 0.1 245), oklch(0.38 0.1 250)); --scene: linear-gradient(180deg, oklch(0.82 0.05 230), oklch(0.9 0.03 220)); }
 [data-theme="blue"] body, [data-theme="blue"] .desktop { background: oklch(0.64 0.04 240); }
+
+/* Shared edge resizing and desktop Start menu. */
+.oswin { resize: none; min-width: min(260px, calc(100vw - 16px)); max-width: calc(100vw - 16px); max-height: calc(100dvh - 92px); top: calc(50% - 5px); overflow: auto; }
+.oswin > .titlebar { position: sticky; top: 0; z-index: 3; }
+.window-resize { display: none; }
+.oswin .window-resize { display: block; position: fixed; top: 0; bottom: 0; width: 10px; cursor: ew-resize; touch-action: none; z-index: 5; }
+.window-resize-left { left: 0; }
+.window-resize-right { right: 0; }
+.oswin .photo > button { max-width: 100%; }
+.oswin .grid { grid-template-columns: repeat(auto-fit, minmax(min(120px, 100%), 1fr)); }
+.start-taskbar { position: fixed; bottom: 0; left: 0; right: 0; z-index: 40; display: flex; align-items: center; gap: 12px; padding: 4px 8px; min-height: 44px; background: var(--card); border-top: 2px solid var(--border); padding-bottom: max(4px, env(safe-area-inset-bottom)); }
+.start-button { min-width: 90px; height: 34px; }
+.start-menu { position: fixed; bottom: calc(48px + env(safe-area-inset-bottom)); left: 8px; width: min(280px, calc(100vw - 16px)); max-height: calc(100dvh - 88px); overflow: auto; z-index: 60; }
+.start-entry { justify-content: flex-start; min-height: 36px; padding: 6px 10px; width: 100%; text-align: left; }
+.start-entry:hover { background: var(--accent); }
+.snake-content { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.snake-field { position: relative; width: 100%; aspect-ratio: 1; background-color: var(--card); background-image: linear-gradient(to right, var(--accent) 1px, transparent 1px), linear-gradient(to bottom, var(--accent) 1px, transparent 1px); background-size: 6.25% 6.25%; border: 2px solid var(--border); overflow: hidden; touch-action: none; }
+.snake-chibi { position: absolute; width: 6.25%; height: 6.25%; object-fit: contain; pointer-events: none; }
+.snake-food { background: var(--accent); border-radius: 50%; outline: 1px solid var(--primary); }
+.snake-overlay { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: color-mix(in oklab, var(--card) 85%, transparent); font-size: 20px; }
+.snake-controls { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.snake-dpad { display: grid; grid-template-columns: repeat(3, 40px); grid-template-rows: repeat(2, 40px); gap: 4px; }
+.snake-dpad > button { width: 40px; height: 40px; touch-action: manipulation; }
+.snake-window { width: min(460px, calc(100vw - 16px)); }
+.snake-field { max-width: min(100%, calc(100dvh - 238px)); margin-inline: auto; }
+.snake-window .titlebar { position: relative; }

@@ -29,4 +29,5 @@ use the editor.
 - **Secrets.** Lovable manages them. Do not put secret values in the repo.
 <!-- LOVABLE:END -->
 
-- Repository exports materialize CDN asset pointers as binary files and rewrite their imports, so standalone deployments do not depend on Lovable asset URLs.
+- Use the shared OS window edge controls for pointer-based width resizing so desktop and touch interactions stay consistent.
+- Keep Chibi Snake isolated from clicker currency and run its movement, growth and collisions through snake-game-engine so existing progress is unaffected.

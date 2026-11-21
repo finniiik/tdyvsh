@@ -6,6 +6,8 @@ import alisa from "@/assets/chibi_alisa_updated.png";
 import { Button } from "@/components/ui/button";
 import { SecretExplorer } from "@/components/secret-explorer";
 import { SECRET_ROOTS, deleteSecretFolder, scatterFolders, type SecretNode } from "@/lib/secret-folders";
+import { ChibiSnakeGame } from "@/components/chibi-snake";
+import { PanelTop, Gamepad2, Settings, Image as ImageIcon } from "lucide-react";
 import pikachu from "@/assets/chibi_andrey_pikachu.png";
 
 export const Route = createFileRoute("/")({
@@ -99,7 +101,7 @@ function Clock() {
   return <span className="tabular-nums">{t}</span>;
 }
 
-type WinId = "clicker" | "collection" | "fortune" | "quests" | "wallpaper" | "scratch";
+type WinId = "clicker" | "collection" | "fortune" | "quests" | "wallpaper" | "scratch" | "snake";
 const WINS: { id: WinId; title: string }[] = [
   { id: "clicker", title: "пирочибиклик" },
   { id: "collection", title: "коллекция" },
@@ -149,6 +151,8 @@ function TitleBar({ title, right, onClose }: { title: string; right?: React.Reac
   return (
     <div className="titlebar text-primary-foreground pl-3 pr-1 py-1.5 flex items-center justify-between gap-2 border-b-[2.5px] border-border leading-[1.2]">
       <span className="text-base truncate leading-[1.2]">{title}</span>
+      <div className="window-resize window-resize-left" data-resize="left" role="separator" aria-label="изменить ширину слева" />
+      <div className="window-resize window-resize-right" data-resize="right" role="separator" aria-label="изменить ширину справа" />
       <div className="flex items-center gap-1">
         {right}
         <span className="winbtn">–</span><span className="winbtn">□</span>
@@ -169,6 +173,10 @@ function Index() {
   const [boot, setBoot] = useState(true);
   const [stack, setStack] = useState<WinId[]>(["clicker"]);
   const [off, setOff] = useState<Partial<Record<WinId, { x: number; y: number }>>>({});
+  const [startMenu, setStartMenu] = useState(false);
+  const [widths, setWidths] = useState<Partial<Record<WinId, number>>>({});
+  useEffect(() => { const fit = () => { setOff({}); setWidths({}); }; window.addEventListener("resize", fit); return () => window.removeEventListener("resize", fit); }, []);
+  useEffect(() => { const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setStartMenu(false); }; window.addEventListener("keydown", esc); return () => window.removeEventListener("keydown", esc); }, []);
   const [folder, setFolder] = useState<Rarity | null>(null);
   const [credits, setCredits] = useState(false);
   const [claimed, setClaimed] = useState<string[]>([]);
@@ -308,7 +316,24 @@ function Index() {
   const winDown = (e: React.PointerEvent, id: WinId) => {
     focusWin(id);
     const t = e.target as HTMLElement;
-    if (!t.closest(".titlebar") || t.closest("button")) return;
+    const edge = t.closest<HTMLElement>("[data-resize]")?.dataset["resize"];
+    if (edge) {
+      e.preventDefault();
+      const el = e.currentTarget as HTMLElement, r = el.getBoundingClientRect();
+      const sx = e.clientX, o = off[id] ?? { x: 0, y: 0 };
+      const min = Math.min(260, window.innerWidth - 16);
+      const max = Math.max(min, edge === "right" ? window.innerWidth - 8 - r.left : r.right - 8);
+      let w = r.width, x = o.x;
+      const move = (ev: PointerEvent) => {
+        w = Math.max(min, Math.min(max, r.width + (ev.clientX - sx) * (edge === "right" ? 1 : -1)));
+        x = o.x + (w - r.width) / 2 * (edge === "right" ? 1 : -1);
+        el.style.width = `${w}px`; el.style.translate = `${x}px ${o.y}px`;
+      };
+      const up = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up); setWidths(p => ({ ...p, [id]: w })); setOff(p => ({ ...p, [id]: { x, y: o.y } })); };
+      window.addEventListener("pointermove", move); window.addEventListener("pointerup", up); window.addEventListener("pointercancel", up);
+      return;
+    }
+    if (e.button !== 0 || !t.closest(".titlebar") || t.closest("button")) return;
     e.preventDefault();
     const el = e.currentTarget as HTMLElement, sx = e.clientX, sy = e.clientY, o = off[id] ?? { x: 0, y: 0 };
     let raf = 0, nx = o.x, ny = o.y;
@@ -323,7 +348,7 @@ function Index() {
   };
   const close = (id: WinId) => setStack((s) => s.filter((x) => x !== id));
   const top = stack[stack.length - 1];
-  const winStyle = (id: WinId) => ({ zIndex: 10 + stack.indexOf(id), display: stack.includes(id) ? undefined : "none", translate: off[id] ? `${off[id].x}px ${off[id].y}px` : undefined });
+  const winStyle = (id: WinId) => ({ width: widths[id], zIndex: 10 + stack.indexOf(id), display: stack.includes(id) ? undefined : "none", translate: off[id] ? `${off[id].x}px ${off[id].y}px` : undefined });
   const winCls = (id: WinId) => `oswin pill overflow-hidden winopen ${top === id ? "" : "oswin-back"}`;
 
   if (boot) return (
@@ -334,13 +359,13 @@ function Index() {
     </main>
   );
 
-  const isDesktopBg = (e: React.SyntheticEvent) => !(e.target as HTMLElement).closest("section,button,a,input,label,.menubar");
+  const isDesktopBg = (e: React.SyntheticEvent) => !(e.target as HTMLElement).closest("section,button,a,input,label,.menubar,.start-menu,.start-taskbar");
   const openMenu = (x: number, y: number) => setMenu({ x: Math.min(x, window.innerWidth - 180), y: Math.min(y, window.innerHeight - 80) });
 
   return (
-    <main className="min-h-screen p-4 pt-11 desktop"
+    <main className="min-h-screen p-4 pt-11 pb-16 desktop"
       style={{ ...(wall ? { backgroundImage: `url(${wall})`, backgroundSize: "cover", backgroundPosition: "center", backgroundAttachment: "fixed" } : {}), ...(folderText ? { ["--folder-text" as string]: folderText } : {}) }}
-      onClick={() => { setMenu(null); setFolderMenu(null); setZipMenu(null); }}
+      onClick={() => { setMenu(null); setFolderMenu(null); setZipMenu(null); setStartMenu(false); }}
       onContextMenu={(e) => { if (!isDesktopBg(e)) return; e.preventDefault(); openMenu(e.clientX, e.clientY); }}
       onPointerDown={(e) => { if (e.pointerType === "mouse" || !isDesktopBg(e)) return; const { clientX, clientY } = e; pressRef.current = window.setTimeout(() => openMenu(clientX, clientY), 550); }}
       onPointerUp={() => { if (pressRef.current) { clearTimeout(pressRef.current); pressRef.current = null; } }}
@@ -480,8 +505,27 @@ function Index() {
         </section>
       </div>
 
+      <div className="start-taskbar" onClick={e => e.stopPropagation()}>
+        <Button variant="os" className="start-button" aria-expanded={startMenu} aria-controls="chibi-start-menu" onClick={() => setStartMenu(v => !v)}><PanelTop />пуск</Button>
+        <span className="text-xs text-muted-foreground truncate">{top === "snake" ? "чиби змейка.exe" : WINS.find(w => w.id === top)?.title ?? "ChibiOS"}</span>
+      </div>
+      {startMenu && <nav id="chibi-start-menu" aria-label="меню пуска" className="start-menu pill" onClick={e => e.stopPropagation()}>
+        <div className="titlebar flex items-center gap-3 p-3"><img src={base} alt="" className="w-10 h-10 object-contain" /><span>ChibiOS</span></div>
+        <div className="p-2 flex flex-col gap-1">
+          <Button variant="osFile" className="start-entry" onClick={() => { focus("snake"); setStartMenu(false); }}><Gamepad2 />чиби змейка</Button>
+          {WINS.map(w => <Button variant="osFile" className="start-entry" key={w.id} onClick={() => { focus(w.id); setStartMenu(false); }}><FolderIco />{w.title}</Button>)}
+          <div className="border-t border-border my-1" />
+          <Button variant="osFile" className="start-entry" onClick={() => { setLook(true); setStartMenu(false); }}><Settings />оформление</Button>
+          <Button variant="osFile" className="start-entry" onClick={() => { focus("wallpaper"); setStartMenu(false); }}><ImageIcon />обои</Button>
+        </div>
+      </nav>}
+      {stack.includes("snake") && <section className={`${winCls("snake")} snake-window`} style={winStyle("snake")} onPointerDown={e => winDown(e, "snake")}>
+        <TitleBar title="чиби змейка.exe" onClose={() => close("snake")} />
+        <ChibiSnakeGame active={top === "snake" && !startMenu && !look && !credits && !secretRoot} />
+      </section>}
+
       {secretRoot && <SecretExplorer key={secretRoot.id} root={secretRoot} onClose={() => setSecretRoot(null)} onDelete={() => removeFolder(secretRoot.id)} />}
-      {unzipped && <button className="xpbtn fixed bottom-3 right-3 z-[55] px-3 py-1 text-primary-foreground shadow-lg" onClick={() => { if (window.confirm("завершить поиск и собрать всё обратно в квест.zip?")) rezip(); }}>завершить поиск</button>}
+      {unzipped && <button className="xpbtn fixed bottom-14 right-3 z-[55] px-3 py-1 text-primary-foreground shadow-lg" onClick={() => { if (window.confirm("завершить поиск и собрать всё обратно в квест.zip?")) rezip(); }}>завершить поиск</button>}
       {zipMenu && <div className="ctxmenu fixed z-[60] w-44" style={{ left: zipMenu.x, top: zipMenu.y }} onClick={e => e.stopPropagation()}><button className="ctxitem" onClick={() => { if (window.confirm("распаковать квест.zip?")) unzip(); else setZipMenu(null); }}>распаковать</button></div>}
       {folderMenu && <div className="ctxmenu fixed z-[60] w-44" style={{ left: folderMenu.x, top: folderMenu.y }} onClick={e => e.stopPropagation()}><Button variant="osFile" className="ctxitem" onClick={() => removeFolder(folderMenu.id)}>удалить папку</Button></div>}
 
