@@ -33,7 +33,7 @@ export function ChibiSnakeGame({ active }: { active: boolean }) {
       if (p.x >= 0) el.append(img);
       return img;
     };
-    game.current = new ChibiSnake({ width: 16, height: 16, tickRate: 6, continuousSpace: false,
+    game.current = new ChibiSnake({ width: 16, height: 16, tickRate: 5, continuousSpace: false,
       scoreConfig: { foodMultiplier: 1, movementMultiplier: 0, useSnakeLength: false,
         onScoreUpdate: (n) => {
           setScore(n); setBest(b => { const next = Math.max(b, n); try { localStorage.setItem("chibi_snake_best", String(next)); } catch {} return next; });
